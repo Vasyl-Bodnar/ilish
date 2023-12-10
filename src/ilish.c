@@ -1,16 +1,17 @@
-#include "buffer.h"
 #include "compiler.h"
 #include "exprs.h"
 #include "parser.h"
 #include "strs.h"
+#include <fcntl.h>
 #include <malloc.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 
 void compile_line(parser_t *parser, compiler_t *compiler, char *line) {
-  buffer_t *buffer = create_buffer(strdup(line));
-  exprs_t *exprs = parse(parser, buffer);
+  exprs_t *exprs = parse(parser, strdup(line));
   if (has_err_parser(parser)) {
     print_errs(parser->errs);
   } else {
@@ -31,8 +32,7 @@ void repl(parser_t *parser, compiler_t *compiler) {
   size_t n = 0;
   printf("> ");
   while (getline(&line, &n, stdin)) {
-    buffer_t *buffer = create_buffer(strdup(line));
-    exprs_t *exprs = parse(parser, buffer);
+    exprs_t *exprs = parse(parser, strdup(line));
     if (has_err_parser(parser)) {
       print_errs(parser->errs);
       printf("\n> ");
@@ -51,13 +51,15 @@ void repl(parser_t *parser, compiler_t *compiler) {
   free(line);
 }
 
-void compile_file(parser_t *parser, compiler_t *compiler, FILE *file) {
-  buffer_t *buffer = create_file_buffer(file);
-  exprs_t *exprs = parse(parser, buffer);
+void compile_file(parser_t *parser, compiler_t *compiler, int file) {
+  struct stat statbuf;
+  fstat(file, &statbuf);
+  char *src = mmap(0, statbuf.st_size, PROT_READ, MAP_SHARED, file, 0);
+  exprs_t *exprs = parse(parser, src);
   if (has_err_parser(parser)) {
     print_lined_errs(parser->errs);
   } else {
-    //print_exprs(exprs, "");
+    // print_exprs(exprs, "");
     if (!compiler)
       puts("yes, what");
     // strs_t *strs = compile(compiler, exprs, buff);
@@ -118,10 +120,9 @@ int main(int argc, char *argv[]) {
     break;
   case 3:
     if (!strcmp(argv[1], "-f")) {
-      FILE *file = fopen(argv[2], "r");
+      int file = open(argv[2], O_RDONLY);
       if (file) {
         compile_file(parser, compiler, file);
-        fclose(file);
       } else {
         puts("Failed to Read a File");
       }

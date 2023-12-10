@@ -130,7 +130,7 @@ int emit_load_bind(compiler_t *compiler, expr_t bind, size_t index) {
     if (bind.exprs->len == 2) {
       switch (bind.exprs->arr[0].type) {
       case SymbSpan:
-        //span_to_str(&bind.exprs->arr[0], compiler->src);
+        span_to_str(&bind.exprs->arr[0], compiler->src);
         /* Fallthrough */
       case Symb:
         emit_load_expr(compiler, bind.exprs->arr[1], index);
@@ -214,7 +214,7 @@ void emit_if(compiler_t *compiler, exprs_t rest) {
 void emit_fun(compiler_t *compiler, expr_t first, exprs_t rest) {
   switch (first.type) {
   case SymbSpan:
-    //span_to_str(&first, compiler->src);
+    span_to_str(&first, compiler->src);
     /* Fallthrough */
   case Symb:
     if (!strcmp(first.str, "1+")) {
@@ -276,7 +276,7 @@ void emit_load_expr(compiler_t *compiler, expr_t expr, size_t index) {
     // WIP
     break;
   case SymbSpan:
-    //span_to_str(&expr, compiler->src);
+    span_to_str(&expr, compiler->src);
     /* Fallthrough */
   case Symb: {
     int found = find_env(compiler->env, expr.str);
@@ -310,7 +310,7 @@ void emit_expr(compiler_t *compiler, expr_t expr) {
     // WIP
     break;
   case SymbSpan:
-    //span_to_str(&expr, compiler->src);
+    span_to_str(&expr, compiler->src);
     /* Fallthrough */
   case Symb: {
     int found = find_env(compiler->env, expr.str);

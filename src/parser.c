@@ -8,7 +8,6 @@
 /// list := \((space*)expr+\)
 /// space := [\t\n\r\n]
 #include "parser.h"
-#include "buffer.h"
 #include "errs.h"
 #include "expr.h"
 #include "exprs.h"
@@ -19,7 +18,8 @@
 
 parser_t *create_parser() {
   parser_t *parser = malloc(sizeof(parser_t));
-  parser->buffer = NULL;
+  parser->input = NULL;
+  parser->loc = 0;
   parser->line = 1;
   parser->line_loc = 0;
   parser->errs = NULL;
@@ -29,8 +29,6 @@ parser_t *create_parser() {
 void delete_parser(parser_t *parser) {
   if (parser->errs)
     delete_errs(parser->errs);
-  if (parser->buffer)
-    delete_buffer(parser->buffer);
   free(parser);
 }
 
@@ -43,25 +41,22 @@ expr_t err_parser(parser_t *parser, enum err err) {
   return (expr_t){.type = Err, .ch = err};
 }
 
-inline char get_parser(parser_t *parser) { return get(parser->buffer); }
+inline char get_parser(parser_t *parser) { return parser->input[parser->loc]; }
 
 inline void adv_parser(parser_t *parser) {
   parser->line_loc++;
-  adv(parser->buffer);
-}
-
-inline void adv_expand_parser(parser_t *parser) {
-  parser->line_loc++;
-  adv_expand(parser->buffer);
+  parser->loc++;
 }
 
 inline void adv_line(parser_t *parser) {
   parser->line++;
   parser->line_loc = 0;
-  adv(parser->buffer);
+  parser->loc++;
 }
 
-inline int eof_parser(parser_t *parser) { return eof(parser->buffer); }
+inline int eof_parser(parser_t *parser) {
+  return !parser->input[parser->loc + 1];
+}
 
 int reserved(parser_t *parser) {
   char c = get_parser(parser);
@@ -69,14 +64,12 @@ int reserved(parser_t *parser) {
          c == '}' || c == ';';
 }
 
-char *str_span(parser_t *parser, size_t stamp) {
-  char *str =
-      strndup(parser->buffer->input + stamp, parser->buffer->loc - stamp);
-  return str;
+inline char *str_span(parser_t *parser, size_t stamp) {
+  return strndup(parser->input + stamp, parser->loc - stamp);
 }
 
-span_t span(parser_t *parser, size_t stamp) {
-  return (span_t){stamp, parser->buffer->loc - stamp};
+inline span_t span(parser_t *parser, size_t stamp) {
+  return (span_t){stamp, parser->loc - stamp};
 }
 
 void skip_to_nl(parser_t *parser) {
@@ -111,32 +104,32 @@ expr_t ch(parser_t *parser) {
 
 expr_t str(parser_t *parser) {
   adv_parser(parser);
-  size_t stamp = parser->buffer->loc;
+  size_t stamp = parser->loc;
   while (get_parser(parser) != '"') {
     if (eof_parser(parser)) {
       return err_parser(parser, StrUnfinishedEof);
     }
-    adv_expand_parser(parser);
+    adv_parser(parser);
   }
   expr_t str = {.line = parser->line,
                 .loc = parser->line_loc,
-                .type = Str,
-                .str = str_span(parser, stamp)};
+                .type = StrSpan,
+                .span = span(parser, stamp)};
   adv_parser(parser);
   return str;
 }
 
 expr_t symb(parser_t *parser) {
-  size_t stamp = parser->buffer->loc;
-  adv_expand_parser(parser);
+  size_t stamp = parser->loc;
+  adv_parser(parser);
   while (!eof_parser(parser) && !isspace(get_parser(parser)) &&
          !reserved(parser)) {
-    adv_expand_parser(parser);
+    adv_parser(parser);
   }
   return (expr_t){.line = parser->line,
                   .loc = parser->line_loc,
-                  .type = Symb,
-                  .str = str_span(parser, stamp)};
+                  .type = SymbSpan,
+                  .span = span(parser, stamp)};
 }
 
 expr_t list(parser_t *parser, char end) {
@@ -162,9 +155,9 @@ expr_t list(parser_t *parser, char end) {
 }
 
 expr_t num(parser_t *parser) {
-  size_t stamp = parser->buffer->loc;
+  size_t stamp = parser->loc;
   while (isdigit(get_parser(parser))) {
-    adv_expand_parser(parser);
+    adv_parser(parser);
   }
   if (eof_parser(parser) || isspace(get_parser(parser)) || reserved(parser)) {
     char *tmp = str_span(parser, stamp);
@@ -174,12 +167,12 @@ expr_t num(parser_t *parser) {
   } else {
     while (!eof_parser(parser) && !isspace(get_parser(parser)) &&
            !reserved(parser)) {
-      adv_expand_parser(parser);
+      adv_parser(parser);
     }
     return (expr_t){.line = parser->line,
                     .loc = parser->line_loc,
-                    .type = Symb,
-                    .str = str_span(parser, stamp)};
+                    .type = SymbSpan,
+                    .span = span(parser, stamp)};
   }
 }
 
@@ -229,12 +222,11 @@ expr_t expr(parser_t *parser) {
   }
 }
 
-exprs_t *parse(parser_t *parser, buffer_t *buffer) {
+exprs_t *parse(parser_t *parser, const char *input) {
   if (parser->errs)
     delete_errs(parser->errs);
-  if (parser->buffer)
-    delete_buffer(parser->buffer);
-  parser->buffer = buffer;
+  parser->input = input;
+  parser->loc = 0;
   parser->line = 1;
   parser->line_loc = 0;
   parser->errs = create_errs(3);

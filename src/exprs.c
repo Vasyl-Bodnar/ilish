@@ -52,7 +52,7 @@ int find_symb_exprs(exprs_t *exprs, const char *symb, const char *src) {
     case StrSpan:
       break;
     case SymbSpan:
-      //span_to_str(&exprs->arr[i], src);
+      span_to_str(&exprs->arr[i], src);
       /* Fallthrough */
     case Symb:
       if (!strcmp(exprs->arr[i].str, symb))

@@ -4,7 +4,8 @@
 #include "errs.h"
 
 typedef struct parser_t {
-  struct buffer_t *buffer;
+  const char *input;
+  size_t loc;
   size_t line;
   size_t line_loc;
   errs_t *errs;
@@ -38,6 +39,6 @@ struct expr_t expr(parser_t *parser);
 /// `errs` from the previous call are freed.
 /// `input` is not modified by parser.
 /// Returned list must be deleted.
-struct exprs_t *parse(parser_t *parser, struct buffer_t *buffer);
+struct exprs_t *parse(parser_t *parser, const char *buffer);
 
 #endif // PARSER_H

@@ -26,7 +26,7 @@ typedef struct expr_t {
   union {
     char ch;               // Char, Err (byte)
     ssize_t num;           // Num
-    //span_t span;           // StrSpan, SymbSpan
+    span_t span;           // StrSpan, SymbSpan
     char *str;             // Str, Symb
     struct exprs_t *exprs; // List
   };
