@@ -3,42 +3,51 @@
 
 #include "errs.h"
 
+/// @file parser.h
+/// @brief String to SExprs parser.
+///
+/// Here is the regex-like grammar used:\n
+/// program := expr+EOF\n
+/// expr := char | num | str | symb | list\n
+/// char := #\\.\n
+/// num := ([0-9]+)space*\n
+/// str := "[^"]*\"\n
+/// symb := ([^"'\(\)\[\]{}]*)space*\n
+/// list := \((space*)expr+\)\n
+/// space := [\t\\n] | (\r\\n)
+
+/// @brief Reusable parser object
 typedef struct parser_t {
-  const char *input;
-  size_t loc;
-  size_t line;
-  size_t line_loc;
-  errs_t *errs;
+  const char *input; ///> String that is being parsed.
+  size_t loc;        ///> The location in the input.
+  size_t line;       ///> Current file line.
+  size_t line_loc;   ///> Current file location.
+  errs_t *errs;      ///> Parser errors.
 } parser_t;
 
+/// @brief Creates a `parser` object with mostly unintialized fields.
+/// @return `parser` object
 parser_t *create_parser();
 
-/// Deletes the `errs` and frees the parser
+/// @brief Deletes any `errs` and frees the `parser`.
 void delete_parser(parser_t *parser);
 
-/// Simple check for whether the parser produced any errors.
-/// Should be used as there is no other proper indication of errors.
+/// @brief Check for whether the parser produced any errors.
+///
+/// Should be used as any error will trigger a compiler error.
+/// @return 1 if any error exists, 0 otherwise
 int has_err_parser(parser_t *parser);
 
-/// Force an error based on location in parser and type enum
+/// @brief Force an error with location in parser and error type.
 struct expr_t err(parser_t *parser, enum err err);
 
-/* int eof(parser_t *parser); */
-
-/* struct expr_t ch(parser_t *parser); */
-
-/* struct expr_t str(parser_t *parser); */
-
-/* struct expr_t list(parser_t *parser); */
-
-/* struct expr_t num(parser_t *parser); */
-
-/// Parse a single expr in a parser
+// Parse a single expr in a parser.
 struct expr_t expr(parser_t *parser);
 
-/// `errs` from the previous call are freed.
-/// `input` is not modified by parser.
-/// Returned list must be deleted.
-struct exprs_t *parse(parser_t *parser, const char *buffer);
+/// @brief Main parse function.
+/// @param parser The reusable parser.
+/// @param input The string to parse.
+/// @return vector of SExprs.
+struct exprs_t *parse(parser_t *parser, const char *input);
 
 #endif // PARSER_H

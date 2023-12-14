@@ -1,12 +1,3 @@
-/// Parses basic sexprs with the following regex-like grammar
-/// program := expr+EOF
-/// expr := char|num|str|symb|list
-/// char := #\.
-/// num := ([0-9]+)space*
-/// str := "[^"]*"
-/// symb := ([^"'\(\)\[\]{}]*)space*
-/// list := \((space*)expr+\)
-/// space := [\t\n\r\n]
 #include "parser.h"
 #include "errs.h"
 #include "expr.h"

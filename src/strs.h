@@ -3,33 +3,51 @@
 
 #include <sys/types.h>
 
+/// @file strs.h
+/// @brief Vector of char*.
+
+/// @brief Vector of char*.
 typedef struct strs_t {
-  char **arr;
-  size_t len;
-  size_t cap;
+  char **arr; ///> The pointer to char*
+  size_t len; ///> The length of the vector
+  size_t cap; ///> The capacity of the vector
 } strs_t;
 
+/// @brief Create the `strs` object with initial capacity.
+/// @param cap Initial capacity.
+/// @return `strs` object
 strs_t *create_strs(size_t cap);
 
-/// Frees the `strs`, `arr`, and all the inner `strings`
+/// @brief Frees the `strs`, `arr`, and all the inner `char*`.
 void delete_strs(strs_t *strs);
 
-/// Assumes ownership of `str`
+/// @brief Push a `char*` to `strs`.
+///
+/// Expands `strs` `cap` by factor of 2 if reached.
+/// `strs` assumes ownership of `str`.
+/// @param str The `char*` to be pushed.
 void push_strs(strs_t *strs, char *str);
 
-/// Frees the str at the end
+/// @brief Frees and removes the `char*` at the end
 void pop_strs(strs_t *strs);
 
-/// Pop applied multiple times
+/// @brief `pop` applied multiple times
+/// @param n The amount of times to apply pop.
 void popn_strs(strs_t *strs, size_t n);
 
-/// If found, index is returned
-/// Otherwise -1 is returned
+/// @brief Find a provided `char*` in `strs`
+/// @param str `char*` to find in `strs`. May be null.
+/// @return Index if found, -1 otherwise.
+/// @sa rfind_strs
 ssize_t find_strs(const strs_t *strs, const char *str);
 
-/// `find_strs` from the back
+/// @brief `find_strs` from the back.
+/// @param str `char*` to find in `strs`. May be null.
+/// @return Index if found, -1 otherwise.
+/// @sa find_strs
 ssize_t rfind_strs(const strs_t *strs, const char *str);
 
+/// @brief Prints `strs` separated by newlines.
 void print_lined_strs(const strs_t *strs);
 
 #endif // STRS_H

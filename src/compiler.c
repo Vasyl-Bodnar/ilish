@@ -356,10 +356,11 @@ strs_t *compile(compiler_t *compiler, exprs_t *exprs, const char *src) {
   if (compiler->errs)
     delete_errs(compiler->errs);
 
+  // Note that current initialization values are arbitrary
   compiler->input = exprs;
   compiler->label = 0;
   compiler->env = create_env(2);
-  compiler->output = create_strs(8); // Fixed but arbitrary
+  compiler->output = create_strs(8); 
   compiler->src = src;
   compiler->errs = create_errs(3);
 
