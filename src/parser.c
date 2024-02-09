@@ -3,17 +3,16 @@
 #include "expr.h"
 #include "exprs.h"
 #include <ctype.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 parser_t *create_parser() {
   parser_t *parser = malloc(sizeof(parser_t));
-  parser->input = NULL;
+  parser->input = 0;
   parser->loc = 0;
   parser->line = 1;
   parser->line_loc = 0;
-  parser->errs = NULL;
+  parser->errs = 0;
   return parser;
 }
 
@@ -34,6 +33,11 @@ expr_t err_parser(parser_t *parser, enum err err) {
 
 inline char get_parser(parser_t *parser) { return parser->input[parser->loc]; }
 
+inline void retr_parser(parser_t *parser) {
+  parser->line_loc--;
+  parser->loc--;
+}
+
 inline void adv_parser(parser_t *parser) {
   parser->line_loc++;
   parser->loc++;
@@ -43,6 +47,10 @@ inline void adv_line(parser_t *parser) {
   parser->line++;
   parser->line_loc = 0;
   parser->loc++;
+}
+
+inline int cur_eof_parser(parser_t *parser) {
+  return !parser->input[parser->loc];
 }
 
 inline int eof_parser(parser_t *parser) {
@@ -59,12 +67,8 @@ inline char *str_span(parser_t *parser, size_t stamp) {
   return strndup(parser->input + stamp, parser->loc - stamp);
 }
 
-inline span_t span(parser_t *parser, size_t stamp) {
-  return (span_t){stamp, parser->loc - stamp};
-}
-
 void skip_to_nl(parser_t *parser) {
-  while (get_parser(parser) != '\r' && get_parser(parser) != '\n') {
+  while (get_parser(parser) != '\n' && get_parser(parser) != '\r') {
     adv_parser(parser);
   }
 }
@@ -79,18 +83,72 @@ void skip_space(parser_t *parser) {
   }
 }
 
-expr_t ch(parser_t *parser) {
+expr_t vec(parser_t *parser) {
+  if (get_parser(parser) == ')') {
+    adv_parser(parser);
+    return (expr_t){.line = parser->line,
+                    .loc = parser->line_loc,
+                    .type = Vec,
+                    .exprs = create_exprs(0)};
+  }
+  exprs_t *exprs = create_exprs(1);
+  while (get_parser(parser) != ')') {
+    if (eof_parser(parser)) {
+      delete_exprs(exprs);
+      return err_parser(parser, VecUnfinishedEof);
+    }
+    push_exprs(exprs, expr(parser));
+    skip_space(parser);
+  }
   adv_parser(parser);
-  if (!eof_parser(parser)) {
-    if (get_parser(parser) == '\\') {
-      adv_parser(parser);
-      char c = get_parser(parser);
+  return (expr_t){.line = parser->line,
+                  .loc = parser->line_loc,
+                  .type = Vec,
+                  .exprs = exprs};
+}
+
+expr_t special(parser_t *parser) {
+  adv_parser(parser);
+  switch (get_parser(parser)) {
+  case '\\':
+    adv_parser(parser);
+    if (eof_parser(parser)) {
+      return err_parser(parser, CharUnfinishedEof);
+    }
+    char c = get_parser(parser);
+    adv_parser(parser);
+    return (expr_t){
+        .line = parser->line, .loc = parser->line_loc, .type = Chr, .ch = c};
+  case 't':
+    adv_parser(parser);
+    return (expr_t){
+        .line = parser->line, .loc = parser->line_loc, .type = Bool, .ch = 1};
+  case 'f':
+    adv_parser(parser);
+    return (expr_t){
+        .line = parser->line, .loc = parser->line_loc, .type = Bool, .ch = 0};
+  case '(':
+    adv_parser(parser);
+    return vec(parser);
+  case ')':
+    adv_parser(parser);
+    return err_parser(parser, ListUnmatchedRight);
+  default:
+    return err_parser(parser, SpecialUnfinishedEof);
+  }
+}
+
+expr_t quote(parser_t *parser) {
+  adv_parser(parser);
+  if (get_parser(parser) == '(') {
+    adv_parser(parser);
+    if (get_parser(parser) == ')') {
       adv_parser(parser);
       return (expr_t){
-          .line = parser->line, .loc = parser->line_loc, .type = Char, .ch = c};
+          .line = parser->line, .loc = parser->line_loc, .type = Null, .ch = 0};
     }
   }
-  return err_parser(parser, CharUnfinishedEof);
+  return err_parser(parser, QuoteUnfinishedEof);
 }
 
 expr_t str(parser_t *parser) {
@@ -104,8 +162,8 @@ expr_t str(parser_t *parser) {
   }
   expr_t str = {.line = parser->line,
                 .loc = parser->line_loc,
-                .type = StrSpan,
-                .span = span(parser, stamp)};
+                .type = Str,
+                .str = str_span(parser, stamp)};
   adv_parser(parser);
   return str;
 }
@@ -119,8 +177,8 @@ expr_t symb(parser_t *parser) {
   }
   return (expr_t){.line = parser->line,
                   .loc = parser->line_loc,
-                  .type = SymbSpan,
-                  .span = span(parser, stamp)};
+                  .type = Symb,
+                  .str = str_span(parser, stamp)};
 }
 
 expr_t list(parser_t *parser, char end) {
@@ -129,7 +187,7 @@ expr_t list(parser_t *parser, char end) {
     adv_parser(parser);
     return err_parser(parser, EmptyList);
   }
-  exprs_t *exprs = create_exprs(4);
+  exprs_t *exprs = create_exprs(1);
   while (get_parser(parser) != end) {
     if (eof_parser(parser)) {
       delete_exprs(exprs);
@@ -147,12 +205,19 @@ expr_t list(parser_t *parser, char end) {
 
 expr_t num(parser_t *parser) {
   size_t stamp = parser->loc;
+  if (get_parser(parser) == '-') {
+    adv_parser(parser);
+    if (!isdigit(get_parser(parser))) {
+      retr_parser(parser);
+    }
+  }
   while (isdigit(get_parser(parser))) {
     adv_parser(parser);
   }
-  if (eof_parser(parser) || isspace(get_parser(parser)) || reserved(parser)) {
+  if (cur_eof_parser(parser) || isspace(get_parser(parser)) ||
+      reserved(parser)) {
     char *tmp = str_span(parser, stamp);
-    expr_t num = {.type = Num, .num = strtoll(tmp, NULL, 10)};
+    expr_t num = {.type = Num, .num = strtoll(tmp, 0, 10)};
     free(tmp);
     return num;
   } else {
@@ -162,15 +227,17 @@ expr_t num(parser_t *parser) {
     }
     return (expr_t){.line = parser->line,
                     .loc = parser->line_loc,
-                    .type = SymbSpan,
-                    .span = span(parser, stamp)};
+                    .type = Symb,
+                    .str = str_span(parser, stamp)};
   }
 }
 
 expr_t expr(parser_t *parser) {
   switch (get_parser(parser)) {
   case '#':
-    return ch(parser);
+    return special(parser);
+  case '\'':
+    return quote(parser);
   case '"':
     return str(parser);
   case '(':
@@ -179,6 +246,7 @@ expr_t expr(parser_t *parser) {
     return list(parser, ']');
   case '{':
     return list(parser, '}');
+  case '-':
   case '0':
   case '1':
   case '2':

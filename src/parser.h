@@ -6,15 +6,10 @@
 /// @file parser.h
 /// @brief String to SExprs parser.
 ///
-/// Here is the regex-like grammar used:\n
-/// program := expr+EOF\n
-/// expr := char | num | str | symb | list\n
-/// char := #\\.\n
-/// num := ([0-9]+)space*\n
-/// str := "[^"]*\"\n
-/// symb := ([^"'\(\)\[\]{}]*)space*\n
-/// list := \((space*)expr+\)\n
-/// space := [\t\\n] | (\r\\n)
+/// Parses SExprs to Scheme standard with few exceptions.
+/// - Currently [], {} are parsed the same as (), while R7 reserves them for
+/// potential future use.
+/// - Certain language features like bools are unimplemented, thus not parsed.
 
 /// @brief Reusable parser object
 typedef struct parser_t {

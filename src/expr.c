@@ -1,47 +1,21 @@
 #include "expr.h"
 #include "exprs.h"
 #include <malloc.h>
-#include <string.h>
-
-char *span_as_str(span_t span, const char *src) {
-  char *str = strndup(src + span.start, span.len);
-  str[span.len] = '\0';
-  return str;
-}
-
-void span_to_str(expr_t *span, const char *src) {
-  switch (span->type) {
-  case Err:
-  case Char:
-  case Num:
-  case Str:
-  case Symb:
-  case List:
-    break;
-  case StrSpan:
-    span->type = Str;
-    span->str = span_as_str(span->span, src);
-    break;
-  case SymbSpan:
-    span->type = Symb;
-    span->str = span_as_str(span->span, src);
-    break;
-  }
-}
 
 void delete_expr(expr_t expr) {
   switch (expr.type) {
   case Err:
-  case Char:
+  case Null:
+  case Bool:
+  case Chr:
   case Num:
-  case StrSpan:
-  case SymbSpan:
     break;
   case Str:
   case Symb:
     free(expr.str);
     break;
   case List:
+  case Vec:
     delete_exprs(expr.exprs);
     break;
   }
@@ -50,29 +24,36 @@ void delete_expr(expr_t expr) {
 void print_expr(expr_t expr, const char *src) {
   switch (expr.type) {
   case Err:
-    printf("ERR %d!", expr.ch);
+    printf("Error %d!", expr.ch);
     break;
-  case Char:
-    printf("'%c'", expr.ch);
+  case Null:
+    printf("()");
+    break;
+  case Bool:
+    if (expr.ch)
+      printf("#t");
+    else
+      printf("#f");
+    break;
+  case Chr:
+    printf("#\\%c", expr.ch);
     break;
   case Num:
     printf("%zu", expr.num);
     break;
-  case StrSpan:
-    span_to_str(&expr, src);
-    /* Fallthrough */
   case Str:
     printf("\"%s\"", expr.str);
     break;
-  case SymbSpan:
-    span_to_str(&expr, src);
-    /* Fallthrough */
-    break;
   case Symb:
-    printf("`%s`", expr.str);
+    printf("%s", expr.str);
     break;
   case List:
     printf("(");
+    print_exprs(expr.exprs, src);
+    printf(")");
+    break;
+  case Vec:
+    printf("#(");
     print_exprs(expr.exprs, src);
     printf(")");
     break;

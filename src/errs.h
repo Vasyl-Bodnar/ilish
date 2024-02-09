@@ -10,15 +10,21 @@
 /// TODO: Move compiler errors to a different err type
 enum err {
   Eof,
+  QuoteUnfinishedEof,
+  SpecialUnfinishedEof,
   CharUnfinishedEof,
   StrUnfinishedEof,
   ListUnfinishedEof,
   ListUnmatchedRight,
   EmptyList,
+  VecUnfinishedEof,
+  VecUnmatchedRight,
+  EmptyVec,
 
   ParserFailure,
   UnmatchedFun,
   UndefinedSymb,
+  ExpectedFixnum,
   ExpectedFunSymb,
   ExpectedSymb,
   ExpectedList,
@@ -26,6 +32,7 @@ enum err {
   ExpectedAtLeastUnary,
   ExpectedBinary,
   ExpectedAtLeastBinary,
+  ExpectedAtMostBinary,
   ExpectedTrinary,
 };
 

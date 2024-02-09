@@ -36,8 +36,16 @@ void print_err(err_t err) {
   case Eof:
     printf("Unexpected Null Character");
     break;
+  case QuoteUnfinishedEof:
+    printf("Special symbol ' is unfinished. Did you forget to finish the quote "
+           "like '(), '(a b). Chars use #\\c instead of 'c'");
+    break;
+  case SpecialUnfinishedEof:
+    printf("Special symbol # is unfinished. Did you mean a char #\\a, bool #t, "
+           "or vector #()?");
+    break;
   case CharUnfinishedEof:
-    printf("Char is unfinished, check for unmatched ''.");
+    printf("Char is unfinished, check for unfinished #\\.");
     break;
   case StrUnfinishedEof:
     printf("String is unfinished, check for matching \"\".");
@@ -46,9 +54,22 @@ void print_err(err_t err) {
     printf("SExpr is unfinished, check for matching parens ( ).");
     break;
   case ListUnmatchedRight:
-    printf("Right paren ) is unmatched, it is extra or lacks left paren (.");
+    printf(
+        "Right paren ) is unmatched, either it is extra or lacks a left paren "
+        "(.");
     break;
   case EmptyList:
+    printf("Empty lists are not allowed.");
+    break;
+  case VecUnfinishedEof:
+    printf("Vector is unfinished, check for matching parens #( ).");
+    break;
+  case VecUnmatchedRight:
+    printf("Right vector paren ) is unmatched, either it is extra or lacks "
+           "a left paren "
+           "#(.");
+    break;
+  case EmptyVec:
     printf("Empty lists are not allowed.");
     break;
   case ParserFailure:
@@ -59,6 +80,9 @@ void print_err(err_t err) {
     break;
   case UndefinedSymb:
     printf("Undefined symbol.");
+    break;
+  case ExpectedFixnum:
+    printf("Expected a number.");
     break;
   case ExpectedFunSymb:
     printf("Expected function name to be a symbol.");
@@ -80,6 +104,9 @@ void print_err(err_t err) {
     break;
   case ExpectedAtLeastBinary:
     printf("Expected at least 2 arguments to function.");
+    break;
+  case ExpectedAtMostBinary:
+    printf("Expected at most 2 arguments to function.");
     break;
   case ExpectedTrinary:
     printf("Expected 3 arguments to function.");

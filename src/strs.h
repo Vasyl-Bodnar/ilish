@@ -15,7 +15,7 @@ typedef struct strs_t {
 
 /// @brief Create the `strs` object with initial capacity.
 /// @param cap Initial capacity.
-/// @return `strs` object
+/// @return `strs` object.
 strs_t *create_strs(size_t cap);
 
 /// @brief Frees the `strs`, `arr`, and all the inner `char*`.
@@ -28,12 +28,19 @@ void delete_strs(strs_t *strs);
 /// @param str The `char*` to be pushed.
 void push_strs(strs_t *strs, char *str);
 
-/// @brief Frees and removes the `char*` at the end
+/// @brief Frees and removes the `char*` at the end.
 void pop_strs(strs_t *strs);
 
-/// @brief `pop` applied multiple times
+/// @brief `pop` applied multiple times.
 /// @param n The amount of times to apply pop.
 void popn_strs(strs_t *strs, size_t n);
+
+/// @brief Unite multiple `strs` into one.
+///
+/// All inner `char*` will be cloned into the new `strs`.
+/// @param strs The array of `strs` to unite.
+/// @param len The amount of strs in the array.
+strs_t *union_strs(const strs_t **strs, size_t len);
 
 /// @brief Find a provided `char*` in `strs`
 /// @param str `char*` to find in `strs`. May be null.

@@ -1,27 +1,33 @@
-CFLAGS += -O2 -W{all,extra,error}
+CFLAGS += -O2 -W{all,extra,error,pedantic}
 DEBUGFLAGS = -DDEBUG -pg -Og -ggdb3
 
 SRCDIR = src
 SRC = $(wildcard $(SRCDIR)/*.c)
+SRC.runtime = runtime/runtime.c
 
 OBJDIR = build
 OBJDIR.release = $(OBJDIR)/release/
 OBJDIR.debug = $(OBJDIR)/debug/
+OBJDIR.runtime = $(OBJDIR)/runtime/
 
 OBJ = ilish
 OBJ.release = $(OBJDIR.release)$(OBJ)
 OBJ.debug = $(OBJDIR.debug)$(OBJ)
+OBJ.runtime = $(OBJDIR.runtime)runtime.o
 
 MKDIR = mkdir -p
 MKDIR.release = $(MKDIR) $(OBJDIR.release)
 MKDIR.debug = $(MKDIR) $(OBJDIR.debug)
+MKDIR.runtime = $(MKDIR) $(OBJDIR.runtime)
 
 DOC = doxygen
 DOCCONF = Doxyfile
 
-all: release
+all: release rnt
 
-build: debug
+rnt:
+	${MKDIR.runtime}
+	${CC} $(CFLAGS) -c $(SRC.runtime) -o $(OBJ.runtime)
 
 release:
 	${MKDIR.release}

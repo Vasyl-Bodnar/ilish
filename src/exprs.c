@@ -38,7 +38,7 @@ exprs_t slice_start_exprs(exprs_t *exprs, size_t start) {
                      .len = exprs->len - start,
                      .cap = exprs->cap - start};
   } else {
-    return (exprs_t){.arr = NULL, .len = 0, .cap = 0};
+    return (exprs_t){.arr = 0, .len = 0, .cap = 0};
   }
 }
 
@@ -46,14 +46,13 @@ int find_symb_exprs(exprs_t *exprs, const char *symb, const char *src) {
   for (size_t i = 0; i < exprs->len; i++) {
     switch (exprs->arr[i].type) {
     case Err:
-    case Char:
+    case Null:
+    case Bool:
+    case Chr:
     case Num:
     case Str:
-    case StrSpan:
+    case Vec:
       break;
-    case SymbSpan:
-      span_to_str(&exprs->arr[i], src);
-      /* Fallthrough */
     case Symb:
       if (!strcmp(exprs->arr[i].str, symb))
         return i;

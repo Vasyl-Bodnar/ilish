@@ -10,12 +10,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+const size_t heap_size = 1024;
+
 void compile_line(parser_t *parser, compiler_t *compiler, char *line) {
   exprs_t *exprs = parse(parser, strdup(line));
   if (has_err_parser(parser)) {
     print_errs(parser->errs);
   } else {
-    strs_t *strs = compile(compiler, exprs, line);
+    strs_t *strs = compile(compiler, exprs, heap_size, line);
     if (has_errc(compiler)) {
       print_errs(compiler->errs);
       puts("");
@@ -37,7 +39,7 @@ void repl(parser_t *parser, compiler_t *compiler) {
       print_errs(parser->errs);
       printf("\n> ");
     } else {
-      strs_t *strs = compile(compiler, exprs, line);
+      strs_t *strs = compile(compiler, exprs, heap_size, line);
       if (has_errc(compiler)) {
         print_errs(compiler->errs);
         printf("\n> ");
@@ -59,47 +61,35 @@ void compile_file(parser_t *parser, compiler_t *compiler, int file) {
   if (has_err_parser(parser)) {
     print_lined_errs(parser->errs);
   } else {
-    // print_exprs(exprs, "");
-    if (!compiler)
-      puts("yes, what");
-    // strs_t *strs = compile(compiler, exprs, buff);
-    // if (has_errc(compiler)) {
-    //  print_lined_errs(compiler->errs);
-    //} else {
-    // print_lined_strs(strs);
-    //}
-    // delete_strs(strs);
+    // compiler->loc = 0;
+    strs_t *strs = compile(compiler, exprs, heap_size, src);
+    if (has_errc(compiler)) {
+      print_lined_errs(compiler->errs);
+    } else {
+      print_lined_strs(strs);
+    }
+    delete_strs(strs);
   }
-  delete_exprs(exprs);
+  munmap(src, statbuf.st_size);
 }
 
-// WIP
-// void compile_pipe(parser_t *parser, compiler_t *compiler) {
-// char buff[1024];
-// char *line = NULL;
-// size_t size = 0;
-// size_t n;
-//
-// while ((n = fread(buff, 1, sizeof(buff), stdin))) {
-// char *new_buff = realloc(line, size + n);
-// if (!new_buff) {
-// puts("Memory allocation failed");
-// free(line);
-// return;
-// }
-// memcpy(new_buff + size, buff, n);
-// line = new_buff;
-// size += n;
-// exprs_t *exprs = parse(parser, line);
-// if (has_err_parser(parser)) {
-// print_errs(parser->errs);
-// } else {
-// compile(compiler, exprs, line);
-// }
-// free(line);
-// size = 0;
-// }
-// }
+// BROKEN, technically completely unnecessery features
+void compile_pipe(parser_t *parser, compiler_t *compiler) {
+  char *buff = mmap(0, 1024, PROT_READ, MAP_SHARED, (size_t)stdin, 0);
+  exprs_t *exprs = parse(parser, buff);
+  if (has_err_parser(parser)) {
+    print_lined_errs(parser->errs);
+  } else {
+    strs_t *strs = compile(compiler, exprs, heap_size, buff);
+    if (has_errc(compiler)) {
+      print_lined_errs(compiler->errs);
+    } else {
+      print_lined_strs(strs);
+    }
+    delete_strs(strs);
+  }
+  munmap(buff, 1024);
+}
 
 int main(int argc, char *argv[]) {
   parser_t *parser = create_parser();
