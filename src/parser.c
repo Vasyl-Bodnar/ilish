@@ -177,18 +177,76 @@ expr_t symb(parser_t *parser) {
   }
   return (expr_t){.line = parser->line,
                   .loc = parser->line_loc,
-                  .type = Symb,
+                  .type = Sym,
                   .str = str_span(parser, stamp)};
 }
 
-expr_t list(parser_t *parser, char end) {
+expr_t lambda(parser_t *parser) {
+  exprs_t *exprs = create_exprs(2);
+  if (eof_parser(parser)) {
+    delete_exprs(exprs);
+    return err_parser(parser, ListUnfinishedEof);
+  }
+  push_exprs(exprs, (expr_t){.line = parser->line,
+                             .loc = parser->line_loc,
+                             .type = Sym,
+                             .str = strdup("lambda")});
   adv_parser(parser);
-  if (get_parser(parser) == end) {
+  exprs_t *args = create_exprs(1);
+  if (get_parser(parser) == ')') {
+    adv_parser(parser);
+    push_exprs(exprs, (expr_t){.line = parser->line,
+                               .loc = parser->line_loc,
+                               .type = List,
+                               .exprs = args});
+  } else {
+    while (get_parser(parser) != ')') {
+      if (eof_parser(parser)) {
+        delete_exprs(exprs);
+        return err_parser(parser, ListUnfinishedEof);
+      }
+      push_exprs(args, expr(parser));
+      skip_space(parser);
+    }
+    adv_parser(parser);
+    push_exprs(exprs, (expr_t){.line = parser->line,
+                               .loc = parser->line_loc,
+                               .type = List,
+                               .exprs = args});
+  }
+  while (get_parser(parser) != ')') {
+    if (eof_parser(parser)) {
+      delete_exprs(exprs);
+      return err_parser(parser, ListUnfinishedEof);
+    }
+    push_exprs(exprs, expr(parser));
+    skip_space(parser);
+  }
+  adv_parser(parser);
+  return (expr_t){.line = parser->line,
+                  .loc = parser->line_loc,
+                  .type = List,
+                  .exprs = exprs};
+}
+
+expr_t list(parser_t *parser) {
+  adv_parser(parser);
+  if (get_parser(parser) == ')') {
     adv_parser(parser);
     return err_parser(parser, EmptyList);
   }
   exprs_t *exprs = create_exprs(1);
-  while (get_parser(parser) != end) {
+  if (eof_parser(parser)) {
+    delete_exprs(exprs);
+    return err_parser(parser, ListUnfinishedEof);
+  }
+  expr_t name = expr(parser);
+  skip_space(parser);
+  if (name.type == Sym && !strcmp(name.str, "lambda")) {
+    return lambda(parser);
+  }
+  push_exprs(exprs, name);
+  while (get_parser(parser) != ')') {
     if (eof_parser(parser)) {
       delete_exprs(exprs);
       return err_parser(parser, ListUnfinishedEof);
@@ -227,7 +285,7 @@ expr_t num(parser_t *parser) {
     }
     return (expr_t){.line = parser->line,
                     .loc = parser->line_loc,
-                    .type = Symb,
+                    .type = Sym,
                     .str = str_span(parser, stamp)};
   }
 }
@@ -241,11 +299,7 @@ expr_t expr(parser_t *parser) {
   case '"':
     return str(parser);
   case '(':
-    return list(parser, ')');
-  case '[':
-    return list(parser, ']');
-  case '{':
-    return list(parser, '}');
+    return list(parser);
   case '-':
   case '0':
   case '1':
@@ -270,8 +324,6 @@ expr_t expr(parser_t *parser) {
     adv_parser(parser);
     return expr(parser);
   case ')':
-  case ']':
-  case '}':
     adv_parser(parser);
     return err_parser(parser, ListUnmatchedRight);
   case '\0':

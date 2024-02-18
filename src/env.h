@@ -7,127 +7,132 @@
 /// @brief Expanded version of `strs` for compiler environment.
 ///
 /// Vector of `char*` much like `strs`.
-/// However to work better as variable and stack environment, certain additional
-/// functionalities were added and modified:
+/// However to work better as variable and register environment, certain
+/// additional functionalities were added and modified:
 ///
-/// - `req`, the maximum length reached to let the compiler know how much stack
-/// is required to be allocated.
 /// - `used`, an extra flag to denote whether location is currently in use.
-/// - `find_env` and `rfind_env` do not allow null inputs.
-/// - `find_unused_null_env` replaces above.
+/// - `find_env` does not allow null inputs.
 ///
-/// Currently in-process of signficant refactoring.
+/// Currently in-process of HEAVY refactoring.
+
+enum used_type {
+  None = 0,    // Unused/Free
+  Unknown = 1, // Either yet, or rely on runtime info
+  Fixnum,
+  Char,
+  Boolean,
+  Nil,
+  Cons = 6, // Pointers below
+  Vector,
+  String,
+  Symbol,
+  Lambda,
+};
+
+typedef struct var {
+  ///> Variable name, or null for temporary use
+  char *str;
+  ///> In-use flag
+  enum used_type used;
+  ///> Function arguments
+  struct exprs_t *args;
+  ///> Pointer flag
+  int root_spill;
+  ///> Arg flag
+  int arg_spill;
+} var_t;
 
 /// @brief Compiler environment
-// (Potentially remove pop and rely on len)
 typedef struct env_t {
-  struct var {       ///> Variable name, or null for generic stack use
-    char *str;       ///> In-use flag
-    char used;       ///> Pointer flag
-    char points;     ///> Root(stack) flag
-    char root_spill; ///> Arg flag
-    char arg_spill;
-  } *arr; ///> Maximum stack required
-  size_t req;
+  var_t *arr;
   size_t len;
   size_t cap;
+  ///> Non-Volatile offset
+  size_t nvol;
+  ///> Reserved offset
+  size_t res;
+  ///> Stack offset
+  size_t stack;
 } env_t;
 
 /// @brief Create the `env` object with initial capacity.
-/// @param cap The initial capacity.
+/// @param vol_cap The capacity of volatile registers.
+/// @param nvol_cap The capacity of non-volatile registers.
+/// @param res_cap The capacity of reserved registers.
+/// @param stack_cap The capacity of the stack.
 /// @returns `env` object.
-env_t *create_env(size_t cap);
+env_t *create_env(size_t vol_cap, size_t nvol_cap, size_t res_cap,
+                  size_t stack_cap);
+
+/// @brief Create the `env` object with initial capacity and fills everything
+/// until stack_cap with 0.
+/// @param vol_cap The capacity of volatile registers.
+/// @param nvol_cap The capacity of non-volatile registers.
+/// @param res_cap The capacity of reserved registers.
+/// @param stack_cap The capacity of the stack.
+/// @returns `env` object.
+env_t *create_full_env(size_t vol_cap, size_t nvol_cap, size_t res_cap,
+                       size_t stack_cap);
 
 /// @brief Frees the `env`, `arr`, and all the inner `char*`.
 void delete_env(env_t *env);
 
 /// @brief Push a var to `env`.
 ///
-/// Expands `env` cap by factor of 2 if reached. `env` assumes ownership of
-/// `str`.
-/// @param str The `char*` to be pushed.
-/// @param used Whether var is currently used.
-/// @param points Whether var is a pointer.
-void push_env(env_t *env, char *str, char used, char points);
+/// Expands by 2 when cap is reached. `env` assumes ownership of `str`
+/// @param str The `char*` to be pushed, will be owned.
+/// @param used Whether var is currently used and its type.
+void push_env(env_t *env, char *str, enum used_type used);
 
-/// @brief Push a var to `env` after n elements.
+/// @brief Insert a var into `env`.
 ///
-/// If environment is currently below the n, it repeatedly forces
-/// environment to expand using `push_env` with dead nulls.
-/// @param n The number of elements to ignore
-/// @sa push_env push_stack_env
-void push_postn_env(env_t *env, char *str, char used, char points, size_t n);
-
-/// @brief Push a var to `env`'s stack.
-///
-/// A wrapper around postn with 6
-/// @sa push_env push_postn_env
-void push_stack_env(env_t *env, char *str, char used, char points);
-
-/// @brief Frees and removes the var at the end.
-/// @sa popn_env remove_env pop_or_remove_env
-void pop_env(env_t *env);
-
-/// @brief `pop` applied multiple times.
-/// @param n The amount of times to apply pop.
-/// @sa pop_env
-void popn_env(env_t *env, size_t n);
+/// Will forcefully expand to reach target. `env` assumes ownership of `str`
+/// @param i The location to place it in
+/// @param str The `char*` to be pushed, will be owned.
+/// @param used Whether var is currently used and its type.
+/// @sa push_env
+void insert_env(env_t *env, size_t i, char *str, enum used_type used);
 
 /// @brief Frees and zeroes the var at the location if it is bounded.
 ///
 /// Do note, despite being named remove, it does not change length nor any other
-/// inner object placement. For length prefer pop_or_remove_env while API is
-/// still being transitioned.
+/// inner object placement.
 /// @param i The location to free.
-/// @sa pop_env pop_or_remove_env
 void remove_env(env_t *env, size_t i);
 
-/// @brief Conveniance function which calls pop for top variables and remove for
-/// everything else.
-///
-/// The reason for its existance is current API has been changed significantly
-/// and requires refactoring. Meanwhile this provides the best of both world at
-/// a cost of a branch.
-/// @param i The location to free.
-void pop_or_remove_env(env_t *env, size_t i);
-
-/// @brief Find a provided `char*` (var name) in `env`.
+/// @brief Find a provided `char*` var name in `env`.
 /// @param str Non-null char* to find.
 /// @return Index if found, -1 otherwise.
-/// @sa find_strs rfind_env.
+/// @sa find_strs
 ssize_t find_env(env_t *env, const char *str);
 
-/// @brief `find_env` from the back.
-/// @param str Non-null char* to find.
-/// @return Index if found, -1 otherwise.
-/// @sa rfind_strs find_env
-ssize_t rfind_env(env_t *env, const char *str);
-
-/// @brief `find_env` for unused vars.
-/// @return Index if found, -1 otherwise.
+/// @brief Finds or creates an unused value across any `env` and marks it as
+/// used.
+/// @return Index of the value.
 /// @sa find_env
-ssize_t find_unused_env(env_t *env);
-
-/// @brief `find_env` for unused stack vars.
-/// @return Index if found, -1 otherwise.
-/// @sa find_env
-ssize_t find_unused_stack_env(env_t *env);
-
-/// @brief `find_env` for unused null values.
-/// @return Index if found, -1 otherwise.
-/// @sa find_env
-ssize_t find_unused_null_env(env_t *env);
-
-/// @brief Finds or creates an unused value and marks it as used.
-/// @return Index of the value
-/// @sa find_env find_unused_env
 size_t get_unused_env(env_t *env);
 
-/// @brief Finds or creates an unused value after (and including) n and marks it
-/// as used.
-/// @return Index of the value
+/// @brief get_unused_env after n
+///
+/// Do note that this forcibly creates new empty (zeroed) vars to reach n
 /// @sa get_unused_env
 size_t get_unused_postn_env(env_t *env, size_t n);
+
+/// @brief get_unused_env before n
+///
+/// If it is impossible, it evicts a non-argument register and marks the first
+/// bit of the returned location as 1
+/// @sa get_unused_env
+size_t get_unused_pren_env(env_t *env, size_t n);
+
+/// @brief Move data from j to i and zero j
+void move_env(env_t *env, size_t i, size_t j);
+
+/// @brief Takes a var and tries to reassign it after n
+/// @param i The var to reassign
+/// @param n The point after which to reassign
+/// @sa get_unused_env
+size_t reassign_postn_env(env_t *env, size_t i, size_t n);
 
 /// @brief Prints inner `char*` separated by newlines.
 void print_lined_env(const env_t *env);

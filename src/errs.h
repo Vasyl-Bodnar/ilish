@@ -28,11 +28,12 @@ enum err {
   ExpectedFunSymb,
   ExpectedSymb,
   ExpectedList,
-  ExpectedUnary,
   ExpectedAtLeastUnary,
-  ExpectedBinary,
   ExpectedAtLeastBinary,
   ExpectedAtMostBinary,
+  ExpectedNoArg,
+  ExpectedUnary,
+  ExpectedBinary,
   ExpectedTrinary,
 };
 

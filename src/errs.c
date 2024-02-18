@@ -93,20 +93,23 @@ void print_err(err_t err) {
   case ExpectedList:
     printf("Expected a list.");
     break;
-  case ExpectedUnary:
-    printf("Expected 1 argument to function.");
-    break;
   case ExpectedAtLeastUnary:
     printf("Expected at least 1 argument to function.");
-    break;
-  case ExpectedBinary:
-    printf("Expected 2 arguments to function.");
     break;
   case ExpectedAtLeastBinary:
     printf("Expected at least 2 arguments to function.");
     break;
   case ExpectedAtMostBinary:
     printf("Expected at most 2 arguments to function.");
+    break;
+  case ExpectedNoArg:
+    printf("Expected 0 argument to function.");
+    break;
+  case ExpectedUnary:
+    printf("Expected 1 argument to function.");
+    break;
+  case ExpectedBinary:
+    printf("Expected 2 arguments to function.");
     break;
   case ExpectedTrinary:
     printf("Expected 3 arguments to function.");
@@ -119,12 +122,17 @@ void print_lined_err(err_t err) {
   print_err(err);
 }
 
+void print_charred_err(err_t err) {
+  printf("At char %lu: ", err.loc);
+  print_err(err);
+}
+
 void print_errs(errs_t *errs) {
   for (size_t i = 0; i < errs->len - 1; i++) {
-    print_err(errs->arr[i]);
+    print_charred_err(errs->arr[i]);
     puts("");
   }
-  print_err(errs->arr[errs->len - 1]);
+  print_charred_err(errs->arr[errs->len - 1]);
 }
 
 void print_lined_errs(errs_t *errs) {

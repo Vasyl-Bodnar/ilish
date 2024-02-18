@@ -23,23 +23,37 @@ void delete_exprs(exprs_t *exprs);
 
 /// @brief Push an owned `expr` to `exprs`.
 ///
-/// Expands `exprs` cap by factor of 2 if reached.
+/// Expands `exprs` cap by factor of 1.5 rounded up if reached.
 /// `exprs` assumes ownership of `expr` if it uses dynamically allocated data
 /// (e.g. Num `expr` copied, Str/List owned).
 /// @param expr The owned `expr` to be pushed.
 void push_exprs(exprs_t *exprs, struct expr_t expr);
 
-/// @brief Static slice referencing the original `arr` from
-/// the `start` to `len`.
+/// @brief Deep cloning of the `exprs` object.
+exprs_t *clone_exprs(exprs_t *exprs);
+
+/// @brief Static slice referencing the original `arr` from the `start` to
+/// `len`.
 /// @param start Starting location.
 /// @return Static slice from `start` to `len`.
 exprs_t slice_start_exprs(exprs_t *exprs, size_t start);
+
+/// @brief Deep cloning of the original `arr` from the `start` to `len`.
+/// @param start Starting location.
+/// @return `exprs` clone from `start` to `len`.
+exprs_t *slice_start_clone_exprs(exprs_t *exprs, size_t start);
 
 /// @brief Find a symbol in `exprs`.
 /// @param symb Non-null char* to find.
 /// @param src Original string to allocate spans.
 /// @return Index if found, -1 otherwise.
-int find_symb_exprs(exprs_t *exprs, const char *symb, const char *src);
+int find_symb_exprs(exprs_t *exprs, const char *symb);
+
+/// @brief Converts `exprs` to `strs`
+///
+/// Requires all elements of `exprs` are a Symbol or String.
+/// This is a deep clone.
+struct strs_t *strs_from_exprs(exprs_t *exprs);
 
 /// @brief Calls newline separated `print_expr` on each element.
 /// @param src Original string to allocate spans.

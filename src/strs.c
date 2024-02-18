@@ -5,7 +5,7 @@
 
 strs_t *create_strs(size_t cap) {
   strs_t *strs = malloc(sizeof(*strs));
-  strs->arr = malloc(sizeof(*strs->arr) * cap);
+  strs->arr = calloc(sizeof(*strs->arr), cap);
   strs->len = 0;
   strs->cap = cap;
   return strs;

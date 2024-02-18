@@ -1,28 +1,38 @@
 /// Generational Copying GC Runtime
-/// Also currently implements print for last statement
-#include <stddef.h>
+/// Also currently implements print as a last program statement
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-size_t *gen0_begin;
+
+size_t *gen0_begin = 0;
 size_t *gen0_ptr;
 size_t *gen0_tospace;
 size_t *gen1_begin;
 size_t *gen1_ptr;
 size_t *gen1_tospace;
-size_t **rs_begin;
+size_t **rs_begin = 0;
 
-/// One time allocation with distributed heaps for both generation
+/// One time allocation with distributed heaps for both generation.
+// HACK: !gen0_begin, !rs_begin may seem like pointless checks, but for some
+// reason the executable runs this function at the end of the program, while
+// also running it at the start as is the expected behaviour.
+// Thus, they are set to 0 at the start of the program, and to 1 when cleanup is
+// called which ensures no magic 77KB mallocs when a unit vector program is
+// already long complete.
 void init_gc(size_t rs_size, size_t heap_size) {
-  gen0_begin = malloc(heap_size);               // 0.125
-  gen0_ptr = gen0_begin;                        //
-  gen0_tospace = gen0_begin + (heap_size >> 3); // +0.125
+  if (!gen0_begin) {
+    gen0_begin = malloc(heap_size);               // 0.125
+    gen0_ptr = gen0_begin;                        //
+    gen0_tospace = gen0_begin + (heap_size >> 3); // +0.125
 
-  gen1_begin = gen0_begin + (heap_size >> 3);                      // 0.375
-  gen1_ptr = gen1_begin;                                           //
-  gen1_tospace = gen1_begin + (heap_size >> 2) + (heap_size >> 3); // +0.375
+    gen1_begin = gen0_begin + (heap_size >> 3);                      // 0.375
+    gen1_ptr = gen1_begin;                                           //
+    gen1_tospace = gen1_begin + (heap_size >> 2) + (heap_size >> 3); // +0.375
+  }
 
-  rs_begin = malloc(rs_size);
+  if (!rs_begin) {
+    rs_begin = malloc(rs_size);
+  }
 }
 
 int exists_root(size_t **rs_ptr, size_t target) {
@@ -114,10 +124,13 @@ void collect(size_t **rs_ptr, size_t request) {
 void cleanup() {
   if (gen0_tospace > gen0_begin) {
     free(gen0_begin);
+    gen0_begin = (size_t *)1;
   } else {
     free(gen0_tospace);
+    gen0_tospace = (size_t *)1;
   }
-  // free(rs_begin); Eh, I am evil
+  free(rs_begin);
+  rs_begin = (size_t **)1;
 }
 
 void print(size_t val) {
@@ -152,8 +165,7 @@ void print(size_t val) {
     }
     printf(")");
   } else if ((val & 7) == 6) { // Lambda
-    printf("<Lambda>(ref=0x%zx, free_count=%zu)", val + 2,
-           *((size_t *)(val - 6)));
+    printf("<Lambda>(ref=0x%zx, arity=%zu)", val + 2, *((size_t *)(val - 6)));
   } else if (!(val & 3)) { // Fixnum
     printf("%zd", ((ssize_t)val >> 2));
   }

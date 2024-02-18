@@ -9,11 +9,11 @@ fi
 cat tmp.s
 
 if [[ "$(head -n 1 tmp.s)" = ".data" ]]; then
-    gcc -pg -Og -ggdb3 tmp.s runtime/runtime.c -o tmp # using cc to call gas and ld
+    gcc -pg -Og -ggdb3 tmp.s build/runtime/runtime.o -o tmp # using cc to call gas and ld
     # as tmp.s -o tmp.o # using gas and ld directly
     # ld tmp.o build/runtime/runtime.o -o tmp -lc
     ./tmp
-    rm tmp.o tmp &>/dev/null
+    rm tmp &>/dev/null
 fi
 
 rm tmp.s

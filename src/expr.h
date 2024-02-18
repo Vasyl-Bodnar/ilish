@@ -14,7 +14,7 @@ enum expr {
   Chr,
   Num,
   Str,
-  Symb,
+  Sym,
   List,
   Vec,
 };
@@ -38,6 +38,11 @@ typedef struct expr_t {
 
 /// @brief Frees `str` and `exprs`
 void delete_expr(expr_t expr);
+
+/// @brief Clone `str` and `exprs`, otherwise copy
+expr_t clone_expr(expr_t expr);
+
+int check_symb_expr(expr_t expr, const char *symb);
 
 /// @brief Print an expr and convert span to str as needed.
 void print_expr(expr_t expr, const char *src);

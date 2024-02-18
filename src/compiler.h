@@ -1,42 +1,48 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
+#include "env.h"
 #include "errs.h"
 
 /// @file compiler.h
 /// @brief SExpr to assembly compiler.
 
-/// @brief Potential data types for rax.
-enum data_type {
-  None, // Unused/Free
-  Fixnum,
-  Char,
-  Boolean,
-  Nil,
-  Cons,
-  Vector,
-  // Str,
-  // Symb,
-  Lamb,
-};
-
 /// @brief Reusable compiler object
 typedef struct compiler_t {
-  struct exprs_t *input; ///> Sexprs to compile.
-  size_t line;           ///> Current file line.
-  size_t loc;            ///> Current file loc.
-  size_t heap;           ///> Approximate heap usage.
-  size_t heap_size;      ///> Size of the heap. Real heap usage will be higher.
-  size_t lambda;         ///> Latest in-use anon func.
-  size_t label;          ///> Latest in-use label.
-  enum data_type ret_type; ///> Type of data currently in rax
-  struct env_t *env;       ///> The environment to keep track of stack and vars.
-  struct strs_t *free;     ///> Keeper of free vars during function trace.
-  struct strs_t *fun;      ///> The function declarations.
-  struct strs_t *body;     ///> The output asm.
-  struct strs_t *main;     ///> The main function.
-  struct errs_t *errs;     ///> The errors.
-  const char *src;         ///> The original source file for spans.
+  ///> Sexprs to compile.
+  struct exprs_t *input;
+  ///> Current file line.
+  size_t line;
+  ///> Current file loc.
+  size_t loc;
+  ///> Approximate heap usage.
+  size_t heap;
+  ///> Size of the heap. Real heap usage will be higher.
+  size_t heap_size;
+  ///> Latest in-use anon func.
+  size_t lambda;
+  ///> Latest in-use label.
+  size_t label;
+  ///> Type of data currently in rax
+  enum used_type ret_type;
+  ///> Arguments in case of a lambda
+  struct exprs_t *ret_args;
+  ///> The environment to keep track of stack and vars.
+  struct env_t *env;
+  ///> Keeper of free vars during function trace.
+  struct strs_t *free;
+  ///> The function declarations (uses "double" buffer).
+  struct dstrs_t *fun;
+  ///> The output asm.
+  struct strs_t *body;
+  ///> The main function.
+  struct strs_t *main;
+  ///> The end of main function.
+  struct strs_t *end;
+  ///> The errors.
+  struct errs_t *errs;
+  ///> The original source file for spans.
+  const char *src;
 } compiler_t;
 
 /// @brief Create a compiler object. Does not create any inner objects.
