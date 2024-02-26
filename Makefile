@@ -23,9 +23,9 @@ MKDIR.runtime = $(MKDIR) $(OBJDIR.runtime)
 DOC = doxygen
 DOCCONF = Doxyfile
 
-all: release rnt
+all: release runt
 
-rnt:
+runt:
 	${MKDIR.runtime}
 	${CC} $(CFLAGS) -c $(SRC.runtime) -o $(OBJ.runtime)
 
@@ -41,4 +41,12 @@ doc:
 	$(DOC) $(DOCCONF)
 
 clean:
-	rm -rf $(OBJDIR)
+	rm -f $(OBJ.release)
+	rm -f $(OBJ.debug)
+	rm -f $(OBJ.runtime)
+	rm -r $(OBJDIR.release)
+	rm -r $(OBJDIR.debug)
+	rm -r $(OBJDIR.runtime)
+
+cleandoc:
+	rm -rf $(OBJDIR)/docs

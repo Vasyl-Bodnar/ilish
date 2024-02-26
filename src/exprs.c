@@ -70,6 +70,7 @@ int find_symb_exprs(exprs_t *exprs, const char *symb) {
     case Null:
     case Bool:
     case Chr:
+    case UniChr:
     case Num:
     case Str:
     case Vec:
@@ -89,6 +90,45 @@ int find_symb_exprs(exprs_t *exprs, const char *symb) {
   return -1;
 }
 
+exprs_t *find_all_symb_exprs(exprs_t *exprs, const char *symb) {
+  exprs_t *found = create_exprs(1);
+  int inside = 0;
+  for (size_t i = 0; i < exprs->len; i++) {
+    switch (exprs->arr[i].type) {
+    case Err:
+    case Null:
+    case Bool:
+    case Chr:
+    case UniChr:
+    case Num:
+    case Str:
+    case Vec:
+      break;
+    case Sym:
+      if (!inside && !strcmp(exprs->arr[i].str, symb))
+        push_exprs(found, (expr_t){.type = List, .exprs = clone_exprs(exprs)});
+      else
+        break;
+    case List: {
+      exprs_t *inner = find_all_symb_exprs(exprs->arr[i].exprs, symb);
+      if (inner) {
+        for (size_t j = 0; j < inner->len; j++) {
+          push_exprs(found, inner->arr[j]);
+        }
+        free(inner->arr);
+        free(inner);
+      }
+    }
+    }
+  }
+  if (found->len) {
+    return found;
+  } else {
+    delete_exprs(found);
+    return 0;
+  }
+}
+
 struct strs_t *strs_from_exprs(exprs_t *exprs) {
   strs_t *strs = create_strs(exprs->len);
   for (size_t i = 0; i < exprs->len; i++) {
@@ -97,12 +137,12 @@ struct strs_t *strs_from_exprs(exprs_t *exprs) {
   return strs;
 }
 
-void print_exprs(exprs_t *exprs, const char *src) {
+void print_exprs(exprs_t *exprs) {
   if (exprs->len) {
     for (size_t i = 0; i < exprs->len - 1; i++) {
-      print_expr(exprs->arr[i], src);
+      print_expr(exprs->arr[i]);
       printf(" ");
     }
-    print_expr(exprs->arr[exprs->len - 1], src);
+    print_expr(exprs->arr[exprs->len - 1]);
   }
 }

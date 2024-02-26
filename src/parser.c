@@ -1,3 +1,4 @@
+// TODO: Rework parser into more side-effect based system, this is not rust
 #include "parser.h"
 #include "errs.h"
 #include "expr.h"
@@ -32,6 +33,10 @@ expr_t err_parser(parser_t *parser, enum err err) {
 }
 
 inline char get_parser(parser_t *parser) { return parser->input[parser->loc]; }
+
+inline char peek_parser(parser_t *parser) {
+  return parser->input[parser->loc + 1];
+}
 
 inline void retr_parser(parser_t *parser) {
   parser->line_loc--;

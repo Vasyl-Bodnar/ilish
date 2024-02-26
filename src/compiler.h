@@ -7,6 +7,13 @@
 /// @file compiler.h
 /// @brief SExpr to assembly compiler.
 
+enum emit {
+  Fun,
+  Main,
+  Body,
+  End,
+};
+
 /// @brief Reusable compiler object
 typedef struct compiler_t {
   ///> Sexprs to compile.
@@ -19,7 +26,7 @@ typedef struct compiler_t {
   size_t heap;
   ///> Size of the heap. Real heap usage will be higher.
   size_t heap_size;
-  ///> Latest in-use anon func.
+  ///> Flag whether to emit or not
   size_t lambda;
   ///> Latest in-use label.
   size_t label;
@@ -30,7 +37,9 @@ typedef struct compiler_t {
   ///> The environment to keep track of stack and vars.
   struct env_t *env;
   ///> Keeper of free vars during function trace.
-  struct strs_t *free;
+  struct free_t *free;
+  ///> Which buffer to emit to.
+  enum emit emit;
   ///> The function declarations (uses "double" buffer).
   struct dstrs_t *fun;
   ///> The output asm.

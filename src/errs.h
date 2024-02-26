@@ -25,6 +25,7 @@ enum err {
   UnmatchedFun,
   UndefinedSymb,
   ExpectedFixnum,
+  ExpectedNonUniChar,
   ExpectedFunSymb,
   ExpectedSymb,
   ExpectedList,

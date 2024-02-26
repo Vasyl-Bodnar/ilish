@@ -63,14 +63,20 @@ void collect(size_t **rs_ptr, size_t request) {
       gen0_ptr += sizeof(size_t) * 2;
       break;
     case 2: // Vec
-      memcpy(gen0_ptr, rs_begin[i], 2 * rs_begin[i][0]);
-      gen0_ptr += 2 * rs_begin[i][0];
+      memcpy(gen0_ptr, rs_begin[i],
+             sizeof(size_t) + (sizeof(size_t) >> 2) * rs_begin[i][0]);
+      gen0_ptr += sizeof(size_t) + (sizeof(size_t) >> 2) * rs_begin[i][0];
       break;
     case 3: // Str
+      memcpy(gen0_ptr, rs_begin[i], sizeof(size_t) + (rs_begin[i][0] >> 3));
+      gen0_ptr += sizeof(size_t) + (rs_begin[i][0] >> 3);
       break;
     case 5: // Symb
       break;
     case 6: // Lamb
+      memcpy(gen0_ptr, rs_begin[i],
+             sizeof(size_t) + sizeof(size_t) * rs_begin[i][0]);
+      gen0_ptr += sizeof(size_t) + sizeof(size_t) * rs_begin[i][0];
       break;
     default:
       break;
@@ -89,15 +95,29 @@ void collect(size_t **rs_ptr, size_t request) {
     case 2: // Vec
       if (!exists_root(rs_ptr, gen0_tospace[i])) {
         memcpy(gen0_ptr, (size_t *)gen0_tospace[i],
-               2 * ((size_t *)gen0_tospace[i])[0]);
-        gen0_ptr += 2 * ((size_t *)gen0_tospace[i])[0];
+               sizeof(size_t) +
+                   (sizeof(size_t) >> 2) * ((size_t *)gen0_tospace[i])[0]);
+        gen0_ptr += sizeof(size_t) +
+                    (sizeof(size_t) >> 2) * ((size_t *)gen0_tospace[i])[0];
       }
       break;
     case 3: // Str
+      if (!exists_root(rs_ptr, gen0_tospace[i])) {
+        memcpy(gen0_ptr, (size_t *)gen0_tospace[i],
+               sizeof(size_t) + (((size_t *)gen0_tospace[i])[0] >> 3));
+        gen0_ptr += sizeof(size_t) + (((size_t *)gen0_tospace[i])[0] >> 3);
+      }
       break;
     case 5: // Symb
       break;
     case 6: // Lamb
+      if (!exists_root(rs_ptr, gen0_tospace[i])) {
+        memcpy(gen0_ptr, (size_t *)gen0_tospace[i],
+               sizeof(size_t) +
+                   sizeof(size_t) * ((size_t *)gen0_tospace[i])[0]);
+        gen0_ptr +=
+            sizeof(size_t) + sizeof(size_t) * ((size_t *)gen0_tospace[i])[0];
+      }
       break;
     default:
       break;
@@ -141,7 +161,7 @@ void print(size_t val) {
   } else if (val == 47) { // Nil
     printf("()");
   } else if ((val & 0x0f) == 15) { // Char
-    printf("#\\%c", (int)(val >> 8));
+    printf("#\\x%zx", val >> 8);
   } else if ((val & 7) == 1) { // Cons
     printf("(");
     print(*(size_t *)(val - 1));
@@ -164,6 +184,12 @@ void print(size_t val) {
       }
     }
     printf(")");
+  } else if ((val & 7) == 3) { // String
+    printf("\"");
+    for (size_t len = (*(size_t *)(val - 3)) >> 3, i = 0; i < len; i++) {
+      printf("%c", (char)*(size_t *)(val + 5 + i));
+    }
+    printf("\"");
   } else if ((val & 7) == 6) { // Lambda
     printf("<Lambda>(ref=0x%zx, arity=%zu)", val + 2, *((size_t *)(val - 6)));
   } else if (!(val & 3)) { // Fixnum

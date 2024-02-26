@@ -61,7 +61,6 @@ void compile_file(parser_t *parser, compiler_t *compiler, int file) {
   if (has_err_parser(parser)) {
     print_lined_errs(parser->errs);
   } else {
-    // compiler->loc = 0;
     strs_t *strs = compile(compiler, exprs, heap_size, src);
     if (has_errc(compiler)) {
       print_lined_errs(compiler->errs);
@@ -73,7 +72,7 @@ void compile_file(parser_t *parser, compiler_t *compiler, int file) {
   munmap(src, statbuf.st_size);
 }
 
-// BROKEN, technically completely unnecessery features
+// NOTE: BROKEN, technically completely unnecessery features
 void compile_pipe(parser_t *parser, compiler_t *compiler) {
   char *buff = mmap(0, 1024, PROT_READ, MAP_SHARED, (size_t)stdin, 0);
   exprs_t *exprs = parse(parser, buff);
@@ -123,7 +122,7 @@ int main(int argc, char *argv[]) {
     }
     break;
   default:
-    puts("Too Many Argument");
+    puts("Too Many Arguments");
   }
   delete_parser(parser);
   delete_compiler(compiler);

@@ -20,13 +20,16 @@ enum used_type {
   Unknown = 1, // Either yet, or rely on runtime info
   Fixnum,
   Char,
+  UniChar,
   Boolean,
   Nil,
   Cons = 6, // Pointers below
   Vector,
   String,
+  UniString,
   Symbol,
   Lambda,
+  Box,
 };
 
 typedef struct var {

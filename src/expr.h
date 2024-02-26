@@ -12,6 +12,7 @@ enum expr {
   Null,
   Bool,
   Chr,
+  UniChr,
   Num,
   Str,
   Sym,
@@ -29,7 +30,8 @@ typedef struct expr_t {
   size_t loc;
   enum expr type;
   union {
-    char ch;               /// Char, Err (byte)
+    char ch;               /// Chr, Err (byte)
+    size_t uch;            /// UniChr
     ssize_t num;           /// Num
     char *str;             /// Str, Symb
     struct exprs_t *exprs; /// List
@@ -45,6 +47,6 @@ expr_t clone_expr(expr_t expr);
 int check_symb_expr(expr_t expr, const char *symb);
 
 /// @brief Print an expr and convert span to str as needed.
-void print_expr(expr_t expr, const char *src);
+void print_expr(expr_t expr);
 
 #endif // EXPR_H_

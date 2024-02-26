@@ -9,6 +9,7 @@ void delete_expr(expr_t expr) {
   case Null:
   case Bool:
   case Chr:
+  case UniChr:
   case Num:
     break;
   case Str:
@@ -28,6 +29,7 @@ expr_t clone_expr(expr_t expr) {
   case Null:
   case Bool:
   case Chr:
+  case UniChr:
   case Num:
   default:
     return expr;
@@ -52,6 +54,7 @@ int check_symb_expr(expr_t expr, const char *symb) {
   case Null:
   case Bool:
   case Chr:
+  case UniChr:
   case Num:
   case Str:
     break;
@@ -67,7 +70,7 @@ int check_symb_expr(expr_t expr, const char *symb) {
   return 0;
 }
 
-void print_expr(expr_t expr, const char *src) {
+void print_expr(expr_t expr) {
   switch (expr.type) {
   case Err:
     printf("Error %d!", expr.ch);
@@ -84,6 +87,9 @@ void print_expr(expr_t expr, const char *src) {
   case Chr:
     printf("#\\%c", expr.ch);
     break;
+  case UniChr:
+    printf("#\\%zx", expr.uch);
+    break;
   case Num:
     printf("%zu", expr.num);
     break;
@@ -95,12 +101,12 @@ void print_expr(expr_t expr, const char *src) {
     break;
   case List:
     printf("(");
-    print_exprs(expr.exprs, src);
+    print_exprs(expr.exprs);
     printf(")");
     break;
   case Vec:
     printf("#(");
-    print_exprs(expr.exprs, src);
+    print_exprs(expr.exprs);
     printf(")");
     break;
   }

@@ -84,6 +84,9 @@ void print_err(err_t err) {
   case ExpectedFixnum:
     printf("Expected a number.");
     break;
+  case ExpectedNonUniChar:
+    printf("Expected a non unicode character.");
+    break;
   case ExpectedFunSymb:
     printf("Expected function name to be a symbol.");
     break;

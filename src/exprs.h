@@ -45,9 +45,17 @@ exprs_t *slice_start_clone_exprs(exprs_t *exprs, size_t start);
 
 /// @brief Find a symbol in `exprs`.
 /// @param symb Non-null char* to find.
-/// @param src Original string to allocate spans.
 /// @return Index if found, -1 otherwise.
 int find_symb_exprs(exprs_t *exprs, const char *symb);
+
+/// @brief Recursive finder of all exprs with a given symbol
+///
+/// Given a symbol, it recursevely searches for all its occurences and
+/// returns them all as the `exprs` that contained it in a single `exprs_t`
+/// slice.
+/// @param symb Non-null char* to find.
+/// @return Index if found, -1 otherwise.
+exprs_t *find_all_symb_exprs(exprs_t *exprs, const char *symb);
 
 /// @brief Converts `exprs` to `strs`
 ///
@@ -56,7 +64,6 @@ int find_symb_exprs(exprs_t *exprs, const char *symb);
 struct strs_t *strs_from_exprs(exprs_t *exprs);
 
 /// @brief Calls newline separated `print_expr` on each element.
-/// @param src Original string to allocate spans.
-void print_exprs(exprs_t *exprs, const char *src);
+void print_exprs(exprs_t *exprs);
 
 #endif // EXPRS_H_
