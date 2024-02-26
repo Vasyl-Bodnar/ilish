@@ -13,11 +13,11 @@ if [[ "$(head -n 1 tmp.s)" = ".data" ]]; then
     # as tmp.s -o tmp.o # using gas and ld directly
     # ld tmp.o build/runtime/runtime.o -o tmp -lc
     ./tmp
-    if [[ "$1" != "-t" ]]; then
+    if [[ "$3" != "-et" ]]; then
         rm tmp &>/dev/null
     fi
 fi
 
-if [[ "$1" != "-t" ]]; then
+if [[ "$3" != "-et" ]]; then
     rm tmp.s
 fi

@@ -394,6 +394,7 @@ void emit_genins_regmem_regmem(compiler_t *compiler, const char *ins,
                           ins, regf((tmp >> 1) + 1), add2,
                           reg_to_str(mem_reg2)));
   }
+  remove_env(compiler->env, tmp);
 }
 
 void emit_genins_imm_reg(compiler_t *compiler, const char *ins,
@@ -610,6 +611,7 @@ void emit_movq_regmem_fullmem(compiler_t *compiler, size_t add1,
                           reg_to_str((tmp >> 1) + 1), add2,
                           reg_to_str(mem_reg2), reg_to_str(add_reg), mult));
   }
+  remove_env(compiler->env, tmp);
 }
 
 void emit_movb_regmem_fullmem(compiler_t *compiler, size_t add1,
@@ -638,6 +640,7 @@ void emit_movb_regmem_fullmem(compiler_t *compiler, size_t add1,
                           regb_to_str((tmp >> 1) + 1), add2,
                           reg_to_str(mem_reg2), reg_to_str(add_reg), mult));
   }
+  remove_env(compiler->env, tmp);
 }
 
 void emit_movq_var_fullmem(compiler_t *compiler, size_t var, ssize_t add,
@@ -1039,6 +1042,7 @@ void emit_vector(compiler_t *compiler, exprs_t args) {
     emit_store_expr(compiler, args.arr[i], obj);
     emit_movq_var_regmem(compiler, obj, 6 + (i << 3), Rax);
   }
+  remove_env(compiler->env, obj);
   compiler->ret_type = Vector;
 }
 
@@ -1146,6 +1150,7 @@ void emit_string_c(compiler_t *compiler, const char *cstr) {
     emit_movq_imm_var(compiler, cstr[i], obj);
     emit_movb_var_regmem(compiler, obj, 5 + i, Rax);
   }
+  remove_env(compiler->env, obj);
   if (utf8) {
     compiler->ret_type = UniString;
   } else {
@@ -1168,6 +1173,7 @@ void emit_string(compiler_t *compiler, exprs_t args) {
     emit_var_str(compiler, "shrq $8, %s", obj);
     emit_movb_var_regmem(compiler, obj, 5 + i, Rax);
   }
+  remove_env(compiler->env, obj);
   if (utf8) {
     compiler->ret_type = UniString;
   } else {
