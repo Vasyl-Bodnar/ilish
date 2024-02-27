@@ -44,7 +44,8 @@ void cleanup() {
     free(gen0_tospace);
     gen0_tospace = (size_t *)1;
   }
-  free(rs_begin);
+  // FIX: This keeps being a problem
+  // free(rs_begin);
   rs_begin = (size_t **)1;
 }
 
