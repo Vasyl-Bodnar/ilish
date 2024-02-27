@@ -935,6 +935,7 @@ void emit_let(compiler_t *compiler, exprs_t rest) {
     errc(compiler, ExpectedAtLeastBinary);
   }
 }
+
 void emit_if(compiler_t *compiler, exprs_t rest) {
   if (rest.len == 2) {
     size_t l0 = compiler->label++;
@@ -942,6 +943,7 @@ void emit_if(compiler_t *compiler, exprs_t rest) {
     emit_size_str(compiler, "cmpq $31, %rax\nje L%zu", l0);
     emit_expr(compiler, rest.arr[1]);
     emit_size_str(compiler, "L%zu:", l0);
+    compiler->ret_type = Unknown;
   } else if (rest.len == 3) {
     size_t l0 = compiler->label++;
     size_t l1 = compiler->label++;
@@ -952,6 +954,7 @@ void emit_if(compiler_t *compiler, exprs_t rest) {
     emit_size_str(compiler, "L%zu:", l0);
     emit_expr(compiler, rest.arr[2]);
     emit_size_str(compiler, "L%zu:", l1);
+    compiler->ret_type = Unknown;
   } else {
     compiler->line = rest.arr[0].line;
     compiler->loc = rest.arr[0].loc;
@@ -1321,6 +1324,7 @@ void emit_strref(compiler_t *compiler, exprs_t rest) {
       emit_orq_imm_reg(compiler, 15, Rax);
       remove_env(compiler->env, loc);
       remove_env(compiler->env, obj);
+      compiler->ret_type = UniChar;
       return;
     } else if (compiler->env->arr[obj].used == String) {
       emit_var_str(compiler, "shrq $2, %s", loc);
@@ -1330,6 +1334,7 @@ void emit_strref(compiler_t *compiler, exprs_t rest) {
       emit_orq_imm_reg(compiler, 15, Rax);
       remove_env(compiler->env, loc);
       remove_env(compiler->env, obj);
+      compiler->ret_type = Char;
       return;
     }
     size_t l0 = compiler->label++;
@@ -1348,6 +1353,7 @@ void emit_strref(compiler_t *compiler, exprs_t rest) {
     emit_orq_imm_reg(compiler, 15, Rax);
     remove_env(compiler->env, loc);
     remove_env(compiler->env, obj);
+    compiler->ret_type = UniChar;
   } else {
     compiler->line = rest.arr[0].line;
     compiler->loc = rest.arr[0].loc;
@@ -1905,7 +1911,6 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
     case 'b':
       if (!strcmp(first.str, "begin")) {
         emit_begin(compiler, rest);
-        compiler->ret_type = Unknown;
       } else
         goto Unmatched;
       break;
@@ -1954,7 +1959,6 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
     case 'i':
       if (!strcmp(first.str, "if")) {
         emit_if(compiler, rest);
-        compiler->ret_type = Unknown;
       } else
         goto Unmatched;
       break;
@@ -1979,7 +1983,6 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
         compiler->ret_type = Fixnum;
       } else if (!strcmp(first.str, "string-ref")) {
         emit_strref(compiler, rest);
-        compiler->ret_type = Unknown;
       } else if (!strcmp(first.str, "string-set!")) {
         emit_strset(compiler, rest);
         compiler->ret_type = None;

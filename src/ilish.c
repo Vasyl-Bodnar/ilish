@@ -72,24 +72,9 @@ void compile_file(parser_t *parser, compiler_t *compiler, int file) {
   munmap(src, statbuf.st_size);
 }
 
-// NOTE: BROKEN, technically completely unnecessery features
-void compile_pipe(parser_t *parser, compiler_t *compiler) {
-  char *buff = mmap(0, 1024, PROT_READ, MAP_SHARED, (size_t)stdin, 0);
-  exprs_t *exprs = parse(parser, buff);
-  if (has_err_parser(parser)) {
-    print_lined_errs(parser->errs);
-  } else {
-    strs_t *strs = compile(compiler, exprs, heap_size, buff);
-    if (has_errc(compiler)) {
-      print_lined_errs(compiler->errs);
-    } else {
-      print_lined_strs(strs);
-    }
-    delete_strs(strs);
-  }
-  munmap(buff, 1024);
-}
-
+// TODO: Implement Multiple Files
+// This will likely require extra linking processing and might as well implement
+// libraries at that point, so this is not top priority at the moment.
 int main(int argc, char *argv[]) {
   parser_t *parser = create_parser();
   compiler_t *compiler = create_compiler();
@@ -100,11 +85,9 @@ int main(int argc, char *argv[]) {
   case 2:
     if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help") ||
         !strcmp(argv[1], "help")) {
-      puts("Help is relative");
-    } else if (!strcmp(argv[1], "-p")) {
-      // compile_pipe(parser, compiler);
+      puts("Use -e to compile a passed in string or -f to compile file(s).");
     } else {
-      puts("Unknown Argument");
+      puts("Unknown Argument, See help");
     }
     break;
   case 3:
@@ -118,11 +101,23 @@ int main(int argc, char *argv[]) {
     } else if (!strcmp(argv[1], "-e")) {
       compile_line(parser, compiler, strdup(argv[2]));
     } else {
-      puts("Unknown Argument");
+      puts("Unknown Argument, See help");
     }
     break;
   default:
-    puts("Too Many Arguments");
+    if (!strcmp(argv[1], "-f")) {
+      for (int i = 2; i < argc; i++) {
+        int file = open(argv[i], O_RDONLY);
+        if (file) {
+          compile_file(parser, compiler, file);
+        } else {
+          printf("Failed to Read the File: %s\n", argv[i]);
+        }
+      }
+    } else {
+      puts("Unknown Argument, See help");
+    }
+    break;
   }
   delete_parser(parser);
   delete_compiler(compiler);

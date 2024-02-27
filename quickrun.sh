@@ -1,23 +1,21 @@
 #!/bin/sh
 
-if [[ "$1" = "-f" ]]; then
-    ./build/debug/ilish -f "$2" > tmp.s
-else
-    ./build/debug/ilish -e "$2" > tmp.s
-fi
+case "$1" in
+    "-f") ./build/debug/ilish -f "$2" > tmp.s;;
+    "-fs") shift; ./build/debug/ilish -fs "$@" > tmp.s;;
+    "-fd") ./build/debug/ilish -f "$2" > tmp.s;;
+    "-e") ./build/debug/ilish -e "$2" > tmp.s;;
+    "-ed") ./build/debug/ilish -e "$2" > tmp.s;;
+esac
 
 cat tmp.s
 
-if [[ "$(head -n 1 tmp.s)" = ".data" ]]; then
-    gcc -pg -Og -ggdb3 tmp.s runtime/runtime.c -o tmp 
-    # as tmp.s -o tmp.o # using gas and ld directly
-    # ld tmp.o build/runtime/runtime.o -o tmp -lc
-    ./tmp
-    if [[ "$3" != "-et" ]]; then
-        rm tmp &>/dev/null
-    fi
-fi
+gcc -pg -Og -ggdb3 tmp.s runtime/runtime.c -o tmp
 
-if [[ "$3" != "-et" ]]; then
-    rm tmp.s
-fi
+./tmp
+
+case "$1" in
+    "-fd") gdb tmp;;
+    "-ed") gdb tmp;;
+    *) rm tmp tmp.s;;
+esac

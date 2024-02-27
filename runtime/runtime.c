@@ -161,6 +161,7 @@ void collect(size_t **rs_ptr, size_t request) {
       gen1_tospace = tmp;
     }
     simple_switch(rs_ptr, &gen0_ptr, gen1_begin);
+    gen0_ptr = (gen0_tospace > gen0_begin) ? gen0_begin : gen0_tospace;
   }
 }
 
