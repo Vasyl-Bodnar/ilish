@@ -10,7 +10,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-const size_t heap_size = 128;
+const size_t heap_size = 1024;
 
 void compile_line(parser_t *parser, compiler_t *compiler, char *line) {
   exprs_t *exprs = parse(parser, line);

@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-size_t *gen0_begin = 0;
-size_t *gen0_ptr;
-size_t *gen0_tospace;
-size_t *gen1_begin;
-size_t *gen1_ptr;
-size_t *gen1_tospace;
+#define MIN(x, y) ((x > y) ? y : x)
+
+char *gen0_begin = 0;
+char *gen0_ptr;
+char *gen0_tospace;
+char *gen1_begin;
+char *gen1_ptr;
+char *gen1_tospace;
 size_t **rs_begin = 0;
 
 /// One time allocation with distributed heaps for both generation.
@@ -39,13 +41,12 @@ void init_gc(size_t rs_size, size_t heap_size) {
 void cleanup() {
   if (gen0_tospace > gen0_begin) {
     free(gen0_begin);
-    gen0_begin = (size_t *)1;
+    gen0_begin = (char *)1;
   } else {
     free(gen0_tospace);
-    gen0_tospace = (size_t *)1;
+    gen0_tospace = (char *)1;
   }
-  // FIX: This keeps being a problem
-  // free(rs_begin);
+  free(rs_begin);
   rs_begin = (size_t **)1;
 }
 
@@ -57,68 +58,39 @@ int exists_root(size_t **rs_ptr, size_t target) {
   return 0;
 }
 
-void simple_switch(size_t **rs_ptr, size_t **ptr, size_t *tospace) {
-  *ptr = tospace;
-  for (size_t i = 0;
-       i < (size_t)(rs_ptr < rs_begin ? rs_begin - rs_ptr : rs_ptr - rs_begin);
-       i++) {
+/// TODO: These are simplified algorithms, they do not track pointers
+void copy(size_t **rs_ptr, char **ptr) {
+  for (size_t i = 0; i < (size_t)(rs_ptr - rs_begin); i++) {
     switch ((size_t)(rs_begin[i]) & 0x7) {
     case 1: // Pair
-      memcpy(*ptr, rs_begin[i], sizeof(size_t) * 2);
+      memcpy(*ptr, (void *)(((size_t)rs_begin[i]) - 1), sizeof(size_t) * 2);
+      rs_begin[i] = (size_t *)(*ptr + 1);
       *ptr += sizeof(size_t) * 2;
       break;
     case 2: // Vec
-      memcpy(*ptr, rs_begin[i],
-             sizeof(size_t) + (sizeof(size_t) >> 2) * rs_begin[i][0]);
-      *ptr += sizeof(size_t) + (sizeof(size_t) >> 2) * rs_begin[i][0];
+      memcpy(*ptr, (void *)(((size_t)rs_begin[i]) - 2),
+             sizeof(size_t) + (sizeof(size_t) >> 2) *
+                                  ((size_t *)(((size_t)rs_begin[i]) - 2))[0]);
+      rs_begin[i] = (size_t *)(*ptr + 2);
+      *ptr += sizeof(size_t) + (sizeof(size_t) >> 2) *
+                                   ((size_t *)(((size_t)rs_begin[i]) - 2))[0];
       break;
     case 3: // Str
-      memcpy(*ptr, rs_begin[i], sizeof(size_t) + (rs_begin[i][0] >> 3));
-      *ptr += sizeof(size_t) + (rs_begin[i][0] >> 3);
+      memcpy(*ptr, (void *)(((size_t)rs_begin[i]) - 3),
+             sizeof(size_t) +
+                 (((size_t *)(((size_t)rs_begin[i]) - 3))[0] >> 3));
+      rs_begin[i] = (size_t *)(*ptr + 3);
+      *ptr +=
+          sizeof(size_t) + (((size_t *)(((size_t)rs_begin[i]) - 3))[0] >> 3);
       break;
     case 5: // Symb
       break;
+      // FIX: The way Lamb is allocated contains no len data anymore
     case 6: // Lamb
-      memcpy(*ptr, rs_begin[i],
-             sizeof(size_t) + sizeof(size_t) * rs_begin[i][0]);
-      *ptr += sizeof(size_t) + sizeof(size_t) * rs_begin[i][0];
-      break;
-    default:
-      break;
-    }
-  }
-  for (size_t i = 0; i < (size_t)(*ptr - tospace); i += sizeof(size_t)) {
-    switch (tospace[i] & 0x7) {
-    case 1: // Pair
-      if (!exists_root(rs_ptr, tospace[i])) {
-        memcpy(*ptr, (size_t *)tospace[i], sizeof(size_t) * 2);
-        *ptr += sizeof(size_t) * 2;
-      }
-      break;
-    case 2: // Vec
-      if (!exists_root(rs_ptr, tospace[i])) {
-        memcpy(*ptr, (size_t *)tospace[i],
-               sizeof(size_t) +
-                   (sizeof(size_t) >> 2) * ((size_t *)tospace[i])[0]);
-        *ptr +=
-            sizeof(size_t) + (sizeof(size_t) >> 2) * ((size_t *)tospace[i])[0];
-      }
-      break;
-    case 3: // Str
-      if (!exists_root(rs_ptr, tospace[i])) {
-        memcpy(*ptr, (size_t *)tospace[i],
-               sizeof(size_t) + (((size_t *)tospace[i])[0] >> 3));
-        *ptr += sizeof(size_t) + (((size_t *)tospace[i])[0] >> 3);
-      }
-      break;
-    case 5: // Symb
-      break;
-    case 6: // Lamb
-      if (!exists_root(rs_ptr, tospace[i])) {
-        memcpy(*ptr, (size_t *)tospace[i],
-               sizeof(size_t) + sizeof(size_t) * ((size_t *)tospace[i])[0]);
-        *ptr += sizeof(size_t) + sizeof(size_t) * ((size_t *)tospace[i])[0];
-      }
+      memcpy(*ptr, (void *)(((size_t)rs_begin[i]) - 6),
+             sizeof(size_t) + sizeof(size_t)); // * len like in Vec or Str
+      rs_begin[i] = (size_t *)(*ptr + 6);
+      *ptr += sizeof(size_t) + sizeof(size_t);
       break;
     default:
       break;
@@ -127,42 +99,67 @@ void simple_switch(size_t **rs_ptr, size_t **ptr, size_t *tospace) {
 }
 
 /// Copying collection
-/// NOTE: It is heavy WIP and is mostly untested, it is far too likely that this
-/// implementation simply does not work and is no different from just an
-/// unstable arena allocator with a free at the end of the program
+/// NOTE: This version seems to work,
+/// but is still not tested as heavily as I would like
 void collect(size_t **rs_ptr, size_t request) {
   // 0. Check
-  size_t gen0_difference =
-      ((gen0_tospace > gen0_ptr) ? gen0_tospace - gen0_ptr
-                                 : gen0_ptr - gen0_tospace);
-  if (request < gen0_difference) {
-    return;
-  }
-  // 1. Copy all objs pointed to in rs to tospace.
-  // 2. Navigate tospace and Keep track of copied objects using rs.
-  simple_switch(rs_ptr, &gen0_ptr, gen0_tospace);
-  // 3. tospace = fromspace.
-  size_t *tmp = gen0_begin;
-  gen0_begin = gen0_tospace;
-  gen0_tospace = tmp;
-  // 4. request not satisfied? gen1!
-  // NOTE: Current implementation does not account for gen1 holding data
-  // pointing to gen1, this would probably require an additional set to hold
-  // these generation breaking pointers.
-  gen0_difference = ((gen0_tospace > gen0_ptr) ? gen0_tospace - gen0_ptr
-                                               : gen0_ptr - gen0_tospace);
-  if (request > gen0_difference) {
-    size_t gen1_difference =
-        ((gen1_tospace > gen1_ptr) ? gen1_tospace - gen1_ptr
-                                   : gen1_ptr - gen1_tospace);
-    if ((request + gen0_difference) > gen1_difference) {
-      simple_switch(rs_ptr, &gen1_ptr, gen1_tospace);
-      size_t *tmp = gen1_begin;
-      gen1_begin = gen1_tospace;
-      gen1_tospace = tmp;
+  size_t gen0_left = ((gen0_tospace > gen0_begin)
+                          ? (gen0_tospace - gen0_ptr)
+                          : ((MIN(gen1_begin, gen1_tospace)) - gen0_ptr));
+  if (request >= gen0_left) {
+    // 1. Copy all objs pointed to in rs to tospace.
+    // 2. Navigate tospace and Keep track of copied objects using rs.
+    gen0_ptr = gen0_tospace;
+    copy(rs_ptr, &gen0_ptr);
+    // 3. tospace = fromspace.
+    char *tmp = gen0_begin;
+    gen0_begin = gen0_tospace;
+    gen0_tospace = tmp;
+    // NOTE: Current implementation does not account for gen1 holding data
+    // pointing to gen0, this would probably require an additional set to hold
+    // these generation breaking pointers.
+    gen0_left = ((gen0_tospace > gen0_begin)
+                     ? (gen0_tospace - gen0_ptr)
+                     : ((MIN(gen1_begin, gen1_tospace)) - gen0_ptr));
+    if (request >= gen0_left) {
+      size_t gen1_left =
+          ((gen1_tospace > gen1_begin)
+               ? (gen1_tospace - gen1_ptr)
+               : ((gen1_begin - gen1_tospace) - (gen1_ptr - gen1_begin)));
+      size_t gen0_size =
+          ((gen0_tospace > gen0_begin) ? (gen0_tospace - gen0_begin)
+                                       : (gen0_begin - gen0_tospace));
+      // Copies all gen0 into gen1 and resets gen0
+      if ((request + gen0_size) >= gen1_left) {
+        // Repeat procedure for gen1
+        gen1_ptr = gen1_tospace;
+        copy(rs_ptr, &gen1_ptr);
+        char *tmp = gen1_begin;
+        gen1_begin = gen1_tospace;
+        gen1_tospace = tmp;
+        size_t gen1_size =
+            ((gen1_tospace > gen1_begin) ? (gen1_tospace - gen1_begin)
+                                         : (gen1_begin - gen1_tospace));
+        if ((request + gen0_size) >= gen1_size) {
+          puts("Not Enough Space on the Major Heap! "
+               "Please "
+               "Allocate a Larger Heap.");
+          cleanup();
+          exit(1);
+        }
+      } else {
+        // Just copy, there is enough space
+        copy(rs_ptr, &gen1_ptr);
+      }
+      gen0_ptr = gen0_begin;
+      if (request >= gen0_size) {
+        puts("Not Enough Space on the Minor Heap to Allocate this Object! "
+             "Please "
+             "Allocate a Larger Heap.");
+        cleanup();
+        exit(1);
+      }
     }
-    simple_switch(rs_ptr, &gen0_ptr, gen1_begin);
-    gen0_ptr = (gen0_tospace > gen0_begin) ? gen0_begin : gen0_tospace;
   }
 }
 
