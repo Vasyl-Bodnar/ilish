@@ -23,7 +23,11 @@ Currently single file compilation, REPL, and string evaluation are supported.
 
 Currently these will output x86_64 assembly.
 
-I have also included a basic executable quickrun.sh which with `-f` or `-e` will compile the assembly with `cc` and run it. 
+When building executables, it is important to link the runtime code, which drives the GC. 
+You can create an object file to be linked with `make runt`, or just pass in the runtime.c to `cc`.
+
+I have included a basic executable quickrun.sh which with `-f` or `-e` will compile the assembly with `cc`, link runtime, and run it. 
+
 In current behaviour the compiler prints out the last expression.
 
 ## Language
@@ -42,4 +46,4 @@ Further implementation notes:
 - Vectors and Strings can be defined with #() and "" respectively.
 - String operations are UTF-8 aware and are O(n) for it. However, pure ascii strings are tagged as such and will still be O(1).
 - Objects and immediates are tagged for quick runtime checks and some optimizations are done to avoid them to begin with. Though, not all operations are safe, you can add two vector pointers for example.
-- Lambdas support lexical scoping, tail-call optimizations, and boxing
+- Lambdas support lexical scoping, tail-call optimizations, and free var boxing

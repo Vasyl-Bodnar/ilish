@@ -17,6 +17,10 @@
 /// Mallocing and emitting automatically for snprintf with as many args as you
 /// want. Compiler emitter owns these mallocs, so they need not be cared about.
 /// Preferably abstracted over.
+#define mal_sprintf(str, size, name, args)                                     \
+  size = snprintf(0, 0, str, args);                                            \
+  name = malloc(sizeof(*name) * (size + 1));                                   \
+  snprintf(name, size + 1, str, args);
 #define emit_mal_sprintf(str, args)                                            \
   int size = snprintf(0, 0, str, args);                                        \
   char *phrase = malloc(sizeof(*phrase) * (size + 1));                         \
@@ -294,10 +298,29 @@ const char *regb_to_str(enum reg reg) {
   }
 }
 
-// These are very much not in the way implementation is heading
+ssize_t calc_stack(ssize_t stack_loc) { return stack_loc * 8 - 8; }
+
+// These, while unpleasant, have some important usages in significant generic
+// functions, so for now they will remain.
 // HACK: TEMPORARY
 void emit_var_str(compiler_t *compiler, const char *str, size_t var) {
-  emit_mal_sprintf(str, args(reg_to_str(var + 1)));
+
+  if (var >= compiler->env->stack &&
+      compiler->env->stack > compiler->env->res) {
+    int len;
+    char *tmp;
+    if (calc_stack(compiler->env->stack - var)) {
+      mal_sprintf(
+          "%zd(%s)", len, tmp,
+          args(calc_stack(compiler->env->stack - var), reg_to_str(Rsp)));
+    } else {
+      mal_sprintf("(%s)", len, tmp, args(reg_to_str(Rsp)));
+    }
+    emit_mal_sprintf(str, args(tmp));
+    free(tmp);
+  } else {
+    emit_mal_sprintf(str, args(reg_to_str(var + 1)));
+  }
 }
 
 // HACK: TEMPORARY
@@ -309,8 +332,6 @@ void emit_size_str(compiler_t *compiler, const char *str, size_t num) {
 void emit_str(compiler_t *compiler, const char *str) {
   emit(compiler, strdup(str));
 }
-
-ssize_t calc_stack(ssize_t stack_loc) { return stack_loc * 8 - 8; }
 
 void emit_genins_reg(compiler_t *compiler, const char *ins,
                      const char *(*regf)(enum reg), enum reg reg) {
@@ -804,7 +825,25 @@ void emit_begin(compiler_t *compiler, exprs_t args) {
   }
 }
 
+/// Binary with support for variable number of arguments
 void emit_binary(compiler_t *compiler, const char *action, exprs_t args) {
+  if (args.len >= 2) {
+    size_t arg1 = get_unused_env(compiler->env);
+    emit_store_expr(compiler, args.arr[1], arg1);
+    emit_expr(compiler, args.arr[0]);
+    emit_var_str(compiler, action, arg1);
+    for (size_t i = 2; i < args.len; i++) {
+      emit_store_expr(compiler, args.arr[i], arg1);
+      emit_var_str(compiler, action, arg1);
+    }
+    remove_env(compiler->env, arg1);
+  } else {
+    errc(compiler, ExpectedBinary);
+  }
+}
+
+/// TODO: Variable arguments please
+void emit_comp(compiler_t *compiler, const char *action, exprs_t args) {
   if (args.len == 2) {
     size_t arg1 = get_unused_env(compiler->env);
     emit_store_expr(compiler, args.arr[1], arg1);
@@ -1846,6 +1885,7 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
       break;
     case '*':
       if (!strcmp(first.str, "*")) {
+        // Deal with the Devil
         emit_binary(compiler, "shr $2, %%rax\nimulq %s, %%rax", rest);
         compiler->ret_type = Unknown;
       } else
@@ -1861,42 +1901,42 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
       break;
     case '=':
       if (!strcmp(first.str, "=")) {
-        emit_binary(compiler,
-                    "cmpq %s, %%rax\nmovl $0, %%eax\nsete %%al\nshll $7, "
-                    "%%eax\norl $31, %%eax",
-                    rest);
+        emit_comp(compiler,
+                  "cmpq %s, %%rax\nmovl $0, %%eax\nsete %%al\nshll $7, "
+                  "%%eax\norl $31, %%eax",
+                  rest);
         compiler->ret_type = Boolean;
       } else
         goto Unmatched;
       break;
     case '>':
       if (!strcmp(first.str, ">")) {
-        emit_binary(compiler,
-                    "cmpq %s, %%rax\nmovl $0, %%eax\nsetg %%al\nshll $7, "
-                    "%%eax\norl $31, %%eax",
-                    rest);
+        emit_comp(compiler,
+                  "cmpq %s, %%rax\nmovl $0, %%eax\nsetg %%al\nshll $7, "
+                  "%%eax\norl $31, %%eax",
+                  rest);
         compiler->ret_type = Boolean;
       } else if (!strcmp(first.str, ">=")) {
-        emit_binary(compiler,
-                    "cmpq %s, %%rax\nmovl $0, %%eax\nsetge %%al\nshll $7, "
-                    "%%eax\norl $31, %%eax",
-                    rest);
+        emit_comp(compiler,
+                  "cmpq %s, %%rax\nmovl $0, %%eax\nsetge %%al\nshll $7, "
+                  "%%eax\norl $31, %%eax",
+                  rest);
         compiler->ret_type = Boolean;
       } else
         goto Unmatched;
       break;
     case '<':
       if (!strcmp(first.str, "<")) {
-        emit_binary(compiler,
-                    "cmpq %s, %%rax\nmovl $0, %%eax\nsetl %%al\nshll $7, "
-                    "%%eax\norl $31, %%eax",
-                    rest);
+        emit_comp(compiler,
+                  "cmpq %s, %%rax\nmovl $0, %%eax\nsetl %%al\nshll $7, "
+                  "%%eax\norl $31, %%eax",
+                  rest);
         compiler->ret_type = Boolean;
       } else if (!strcmp(first.str, "<=")) {
-        emit_binary(compiler,
-                    "cmpq %s, %%rax\nmovl $0, %%eax\nsetle %%al\nshll $7, "
-                    "%%eax\norl $31, %%eax",
-                    rest);
+        emit_comp(compiler,
+                  "cmpq %s, %%rax\nmovl $0, %%eax\nsetle %%al\nshll $7, "
+                  "%%eax\norl $31, %%eax",
+                  rest);
         compiler->ret_type = Boolean;
       } else
         goto Unmatched;
