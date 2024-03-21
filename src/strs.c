@@ -47,7 +47,23 @@ void popn_strs(strs_t *strs, size_t n) {
   }
 }
 
-strs_t *union_strs(const strs_t **strs, size_t len) {
+strs_t *union_strs(strs_t **strs, size_t len) {
+  size_t tot_len = 0;
+  for (size_t i = 0; i < len; i++) {
+    tot_len += strs[i]->len;
+  }
+  strs_t *united = create_strs(tot_len);
+  united->len = tot_len;
+  for (size_t k = 0, i = 0; i < len; i++) {
+    for (size_t j = 0; j < strs[i]->len; j++, k++) {
+      united->arr[k] = strs[i]->arr[j];
+    }
+    free(strs[i]);
+  }
+  return united;
+}
+
+strs_t *union_clone_strs(const strs_t **strs, size_t len) {
   size_t tot_len = 0;
   for (size_t i = 0; i < len; i++) {
     tot_len += strs[i]->len;

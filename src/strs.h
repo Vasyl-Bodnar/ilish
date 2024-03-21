@@ -37,10 +37,18 @@ void popn_strs(strs_t *strs, size_t n);
 
 /// @brief Unite multiple `strs` into one.
 ///
+/// All inner `char*` will be copied into the new `strs`.
+/// And thus all the strs will be shallowly freed.
+/// @param strs The array of `strs` to unite.
+/// @param len The amount of strs in the array.
+strs_t *union_strs(strs_t **strs, size_t len);
+
+/// @brief Unite multiple `strs` into one clone.
+///
 /// All inner `char*` will be cloned into the new `strs`.
 /// @param strs The array of `strs` to unite.
 /// @param len The amount of strs in the array.
-strs_t *union_strs(const strs_t **strs, size_t len);
+strs_t *union_clone_strs(const strs_t **strs, size_t len);
 
 /// @brief Find a provided `char*` in `strs`
 /// @param str `char*` to find in `strs`. May be null.

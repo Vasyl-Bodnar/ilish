@@ -8,8 +8,11 @@
 /// @brief SExpr to assembly compiler.
 
 enum emit {
+  Bss,
+  Data,
   Fun,
   Main,
+  Quotes,
   Body,
   End,
 };
@@ -31,7 +34,7 @@ typedef struct compiler_t {
   ///> Latest in-use label.
   size_t label;
   ///> Type of data currently in rax
-  enum used_type ret_type;
+  enum var_type ret_type;
   ///> Arguments in case of a lambda
   struct exprs_t *ret_args;
   ///> The environment to keep track of stack and vars.
@@ -40,12 +43,18 @@ typedef struct compiler_t {
   struct free_t *free;
   ///> Which buffer to emit to.
   enum emit emit;
+  ///> The bss section for quotes.
+  struct strs_t *bss;
+  ///> The data section for constants.
+  struct strs_t *data;
   ///> The function declarations (uses "double" buffer).
   struct dstrs_t *fun;
-  ///> The output asm.
-  struct strs_t *body;
   ///> The main function.
   struct strs_t *main;
+  ///> The quote declarations.
+  struct strs_t *quotes;
+  ///> The output asm.
+  struct strs_t *body;
   ///> The end of main function.
   struct strs_t *end;
   ///> The errors.

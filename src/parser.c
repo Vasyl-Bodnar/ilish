@@ -68,7 +68,7 @@ int reserved(parser_t *parser) {
          c == '}' || c == ';';
 }
 
-inline char *str_span(parser_t *parser, size_t stamp) {
+char *str_span(parser_t *parser, size_t stamp) {
   return strndup(parser->input + stamp, parser->loc - stamp);
 }
 
@@ -176,8 +176,8 @@ expr_t str(parser_t *parser) {
 expr_t symb(parser_t *parser) {
   size_t stamp = parser->loc;
   adv_parser(parser);
-  while (!eof_parser(parser) && !isspace(get_parser(parser)) &&
-         !reserved(parser)) {
+  while (!isspace(get_parser(parser)) && !reserved(parser) &&
+         !eof_parser(parser)) {
     adv_parser(parser);
   }
   return (expr_t){.line = parser->line,
