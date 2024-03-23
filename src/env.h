@@ -16,31 +16,43 @@
 /// compiler-reserved registers or even stack assignment. You can tell which it
 /// is exactly by "offsets", i.e. index of this begins, previous ends.
 
-enum var_type {
-  None = 0,    // Unused/Free
+enum val_type {
+  None = 0,    // Unused/Available
   Unknown = 1, // Either yet, or rely on runtime info
   Fixnum,
   Char,
   UniChar,
   Boolean,
   Nil,
-  Cons = 6, // Pointers below
+  Cons, // Pointers below
   Vector,
   String,
   UniString,
   Symbol,
   Lambda,
-  BoxUnknown = 12, // Boxed types below
+  BoxUnknown, // Boxed types below
   BoxFixnum,
   BoxChar,
   BoxUniChar,
   BoxBoolean,
   BoxNil,
+  BoxCons, // Boxed pointers, for cases like set!ng on boxes
+  BoxVector,
+  BoxString,
+  BoxUniString,
+  BoxSymbol,
+  BoxLambda,
+};
+
+enum var_type {
+  Constant,
+  Mutable,
+  Free,
 };
 
 typedef struct regr {
   ///> Type flag
-  enum var_type type;
+  enum val_type type;
   ///> Is it a variable flag
   char variable;
   ///> Pointer flag
@@ -53,14 +65,16 @@ typedef struct var {
   ///> Variable name
   char *str;
   ///> Type flag. Note that it is identical to regr's var_type
-  enum var_type type;
-  ///> Function arguments (0 for non-functions)
-  struct exprs_t *args;
+  enum val_type val_type;
   ///> Register reserved in the Register table OR Data Section Constants
   ///> depending on constant flag. -1 is default for unassigned
   ssize_t idx;
-  ///> Is it a data section constant flag
-  char constant;
+  ///> Its index in the free vector
+  ssize_t free_idx;
+  ///> Function arguments (0 for non-functions)
+  struct exprs_t *args;
+  ///> Constant, Mutable, or Free?
+  enum var_type var_type;
   ///> Active flag
   char active;
 } var_t;
@@ -116,7 +130,7 @@ void delete_env(env_t *env);
 /// Expands by 2 when cap is reached.
 /// @param type Whether reg is currently used and its type.
 /// @param var Is it a variable
-void push_env(env_t *env, enum var_type type, char var);
+void push_env(env_t *env, enum val_type type, char var);
 
 /// @brief Insert a register into `env`.
 ///
@@ -125,7 +139,7 @@ void push_env(env_t *env, enum var_type type, char var);
 /// @param type Whether reg is currently used and its type.
 /// @param var Is it a variable
 /// @sa push_env
-void insert_env(env_t *env, size_t i, enum var_type type, char var);
+void insert_env(env_t *env, size_t i, enum val_type type, char var);
 
 /// @brief Zeroes the reg at the location.
 ///
@@ -139,8 +153,8 @@ void remove_env(env_t *env, size_t i);
 /// @param str The `char*` to be pushed, will be owned.
 /// @param used Whether var is currently used and its type.
 /// @sa push_env
-void push_var_env(env_t *env, char *str, enum var_type type, size_t idx,
-                  char constant);
+void push_var_env(env_t *env, char *str, enum val_type val_type, size_t idx,
+                  enum var_type var_type);
 
 /// @brief Pushes a var to `env`.
 ///

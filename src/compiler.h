@@ -29,18 +29,18 @@ typedef struct compiler_t {
   size_t heap;
   ///> Size of the heap. Real heap usage will be higher.
   size_t heap_size;
-  ///> Flag whether to emit or not
-  size_t lambda;
-  ///> Latest in-use label.
+  ///> Latest branch label.
   size_t label;
+  ///> Latest lambda label.
+  size_t lambda;
+  ///> Latest free var index.
+  size_t free;
   ///> Type of data currently in rax
-  enum var_type ret_type;
+  enum val_type ret_type;
   ///> Arguments in case of a lambda
   struct exprs_t *ret_args;
   ///> The environment to keep track of stack and vars.
   struct env_t *env;
-  ///> Keeper of free vars during function trace.
-  struct free_t *free;
   ///> Which buffer to emit to.
   enum emit emit;
   ///> The bss section for quotes.

@@ -5,7 +5,6 @@
 #include "errs.h"
 #include "expr.h"
 #include "exprs.h"
-#include "free.h"
 #include "strs.h"
 #include <err.h>
 #include <stdio.h>
@@ -34,12 +33,11 @@ compiler_t *create_compiler() {
   compiler->loc = 0;
   compiler->heap = 0;
   compiler->heap_size = 0;
-  compiler->lambda = 0;
   compiler->label = 0;
-  compiler->emit = 1;
+  compiler->lambda = 0;
+  compiler->free = 0;
   compiler->ret_type = None;
   compiler->ret_args = 0;
-  compiler->free = 0;
   compiler->env = create_env(8, 3, 3, 0, 2);
   compiler->bss = create_strs(2);
   push_strs(compiler->bss, strdup(".bss"));
@@ -62,8 +60,6 @@ void delete_compiler(compiler_t *compiler) {
     delete_exprs(compiler->input);
   if (compiler->env)
     delete_env(compiler->env);
-  if (compiler->free)
-    delete_free(compiler->free);
   if (compiler->bss)
     delete_strs(compiler->bss);
   if (compiler->data)
@@ -1006,7 +1002,7 @@ void emit_mod(compiler_t *compiler, exprs_t args) {
     size_t arg1 = get_unused_env(compiler->env);
     emit_store_expr(compiler, args.arr[1], arg1, 0, 0);
     emit_expr(compiler, args.arr[0]);
-    if (compiler->env->arr[2].type) {
+    if (compiler->env->arr[2].val_type) {
       size_t tmp = get_unused_env(compiler->env);
       emit_movq_reg_var(compiler, Rdx, tmp);
       emit_str(compiler, "cqto");
@@ -1073,7 +1069,7 @@ void emit_letstar(compiler_t *compiler, exprs_t rest) {
     for (size_t i = 0; i < binds->len; i++) {
       size_t reg = get_unused_env(compiler->env);
       push_var_env(compiler->env, strdup(binds->arr[i].exprs->arr[0].str),
-                   Unknown, reg, 0);
+                   Unknown, reg, Mutable);
       compiler->env->rarr[reg].variable = 1;
       if (!emit_load_bind(compiler, binds->arr[i], reg, compiler->env->len - 1,
                           1)) {
@@ -1100,7 +1096,7 @@ void emit_let(compiler_t *compiler, exprs_t rest) {
     for (size_t i = 0; i < binds->len; i++) {
       size_t reg = get_unused_env(compiler->env);
       push_var_env(compiler->env, strdup(binds->arr[i].exprs->arr[0].str),
-                   Unknown, reg, 0);
+                   Unknown, reg, Mutable);
       compiler->env->rarr[reg].variable = 1;
       if (!emit_load_bind(compiler, binds->arr[i], reg, compiler->env->len - 1,
                           1)) {
@@ -1356,7 +1352,7 @@ void emit_string(compiler_t *compiler, exprs_t args) {
   int utf8 = 0;
   for (size_t i = 0; i < args.len; i++) {
     emit_store_expr(compiler, args.arr[i], obj, 0, 0);
-    if (!utf8 && compiler->env->arr[obj].type == UniChar) {
+    if (!utf8 && compiler->env->arr[obj].val_type == UniChar) {
       emit_str(compiler, "orq $1, -3(%rax)");
       utf8 = 1;
     }
@@ -1505,7 +1501,7 @@ void emit_strref(compiler_t *compiler, exprs_t rest) {
     size_t loc = get_unused_env(compiler->env);
     emit_store_expr(compiler, rest.arr[0], obj, 0, 0);
     emit_store_expr(compiler, rest.arr[1], loc, 0, 0);
-    if (compiler->env->arr[obj].type == UniString) {
+    if (compiler->env->arr[obj].val_type == UniString) {
       emit_unistrref(compiler, obj, loc);
       emit_shlq_imm_reg(compiler, 8, Rax);
       emit_orq_imm_reg(compiler, 15, Rax);
@@ -1513,7 +1509,7 @@ void emit_strref(compiler_t *compiler, exprs_t rest) {
       remove_env(compiler->env, obj);
       compiler->ret_type = UniChar;
       return;
-    } else if (compiler->env->arr[obj].type == String) {
+    } else if (compiler->env->arr[obj].val_type == String) {
       emit_var_str(compiler, "shrq $2, %s", loc);
       emit_str(compiler, "xorl %eax, %eax");
       emit_movb_fullmem_reg(compiler, 5, obj + 1, loc + 1, 1, Rax);
@@ -1559,7 +1555,7 @@ void emit_strset(compiler_t *compiler, exprs_t rest) {
       size_t obj = get_unused_env(compiler->env);
       emit_store_expr(compiler, rest.arr[2], obj, 0, 0);
       // TODO: Implement reallocation
-      if (compiler->env->arr[obj].type == UniChar) {
+      if (compiler->env->arr[obj].val_type == UniChar) {
         compiler->line = rest.arr[0].line;
         compiler->loc = rest.arr[0].loc;
         errc(compiler, ExpectedNonUniChar);
@@ -1615,28 +1611,37 @@ void emit_set(compiler_t *compiler, exprs_t rest) {
   if (rest.len == 2) {
     emit_expr(compiler, rest.arr[1]);
     ssize_t found = rfind_active_var_env(compiler->env, rest.arr[0].str);
-    if (found == -1) {
-      if (compiler->free) {
-        found = find_free(compiler->free, rest.arr[0].str);
-        if (found == -1) {
-          found = compiler->free->len;
-          push_free(compiler->free, strdup(rest.arr[0].str), 1);
-        } else {
-          compiler->free->arr[found].boxed = 1;
-        }
-        size_t tmp = get_unused_env(compiler->env);
-        emit_movq_regmem_var(compiler, found * 8 + 10, R13, tmp);
-        emit_movq_reg_regmem(compiler, Rax, 0, tmp + 1);
-        remove_env(compiler->env, tmp);
-      } else {
-        errc(compiler, UndefinedSymb);
-      }
-    } else {
-      emit_movq_reg_var(compiler, Rax, compiler->env->arr[found].idx);
+    switch (compiler->env->arr[found].var_type) {
+    case Free: {
+      size_t tmp = get_unused_env(compiler->env);
+      emit_movq_regmem_var(
+          compiler, compiler->env->arr[found].free_idx * 8 + 10, R13, tmp);
+      emit_movq_reg_regmem(compiler, Rax, 0, tmp + 1);
+      remove_env(compiler->env, tmp);
+      compiler->env->arr[found].val_type = compiler->ret_type += BoxUnknown;
+      break;
     }
-    compiler->env->rarr[compiler->env->arr[found].idx].type =
-        compiler->ret_type;
-    compiler->env->arr[found].type = compiler->ret_type;
+    case Mutable: {
+      emit_movq_reg_var(compiler, Rax, compiler->env->arr[found].idx);
+      compiler->env->rarr[compiler->env->arr[found].idx].type =
+          compiler->ret_type;
+      compiler->env->arr[found].val_type = compiler->ret_type;
+      break;
+    }
+    // NOTE: Counterintuitive, however, in case if compiler assigned something
+    // as constant, but unknown future use (through the power of incremental
+    // compilation) was clearly meant as mutable, this is a simple way to
+    // convert a previous constant to a new mutable
+    case Constant: {
+      compiler->env->arr[found].var_type = Mutable;
+      size_t reg = get_unused_postn_env(compiler->env, 6);
+      compiler->env->arr[found].idx = reg;
+      emit_movq_reg_var(compiler, Rax, reg);
+      compiler->env->rarr[reg].type = compiler->env->arr[found].val_type;
+      compiler->env->rarr[reg].variable = 1;
+      break;
+    }
+    }
     if (compiler->ret_args) {
       compiler->env->arr[found].args = clone_exprs(compiler->ret_args);
     }
@@ -1679,48 +1684,48 @@ void solve_call_order(compiler_t *compiler, exprs_t args, exprs_t rest) {
   delete_bitmat(bitmat);
 }
 
-void emit_box(compiler_t *compiler, size_t var) {
-  collect(compiler, 8);
-  emit_str(compiler, "movq gen0_ptr(%rip), %r14");
-  emit_movq_var_regmem(compiler, var, 0, R14);
-  emit_movq_reg_var(compiler, R14, var);
-  emit_str(compiler, "addq $8, gen0_ptr(%rip)");
-  compiler->heap += 8;
-}
-
-void emit_closure(compiler_t *compiler, size_t lamb, size_t arity,
-                  size_t *free_vars, size_t free_len) {
-  size_t boxes = 0;
-  for (size_t i = 0; i < free_len; i++) {
-    if (free_vars[i] & 1) {
-      boxes++;
+void emit_closure(compiler_t *compiler, size_t lamb, size_t arity) {
+  size_t boxes = 0, free = 0;
+  for (size_t i = 0; i < compiler->env->len; i++) {
+    if (compiler->env->arr[i].active) {
+      if (compiler->env->arr[i].var_type == Free) {
+        free++;
+      }
+      if (compiler->env->arr[i].val_type >= BoxUnknown) {
+        boxes++;
+      }
     }
   }
-  collect(compiler, free_len * 8 + 16 + boxes * 8);
+  collect(compiler, free * 8 + 16 + boxes * 8);
   emit_str(compiler, "movq gen0_ptr(%rip), %r14");
-  for (size_t i = 0, j = 0; i < free_len; i++) {
-    if (free_vars[i] & 1) {
-      emit_movq_var_regmem(compiler, compiler->env->arr[free_vars[i] >> 1].idx,
-                           j * 8, R14);
-      emit_movq_reg_var(compiler, R14,
-                        compiler->env->arr[free_vars[i] >> 1].idx);
+  for (size_t i = 0, j = 0; i < compiler->env->len; i++) {
+    if (compiler->env->arr[i].active &&
+        compiler->env->arr[i].val_type >= BoxUnknown) {
+      emit_movq_var_regmem(compiler, compiler->env->arr[i].idx, j * 8, R14);
+      emit_genins_imm_reg(compiler, "addq", reg_to_str, 8, R14);
+      emit_movq_reg_var(compiler, R14, compiler->env->arr[i].idx);
       j++;
     }
   }
-  emit_size_str(compiler, "addq $%zu, gen0_ptr(%rip)", boxes * 8);
+  if (boxes) {
+    emit_size_str(compiler, "addq $%zu, gen0_ptr(%rip)", boxes * 8);
+  }
   emit_size_str(compiler, "movq gen0_ptr(%%rip), %%r14\nmovq $%zu, (%%r14)",
                 arity);
   size_t tmp = get_unused_env(compiler->env);
   emit_leaq_label_var(compiler, "lambda", lamb, tmp);
   emit_movq_var_regmem(compiler, tmp, 8, R14);
   remove_env(compiler->env, tmp);
-  for (size_t i = 0; i < free_len; i++) {
-    emit_movq_var_regmem(compiler, compiler->env->arr[free_vars[i] >> 1].idx,
-                         i * 8 + 16, R14);
+  for (size_t i = 0; i < compiler->env->len; i++) {
+    if (compiler->env->arr[i].active &&
+        compiler->env->arr[i].var_type == Free) {
+      emit_movq_var_regmem(compiler, compiler->env->arr[i].idx, i * 8 + 16,
+                           R14);
+    }
   }
   emit_str(compiler, "movq %r14, %rax\norq $6, %rax");
-  emit_size_str(compiler, "addq $%zu, gen0_ptr(%rip)", free_len * 8 + 16);
-  compiler->heap += free_len * 8 + 16 + boxes * 8;
+  emit_size_str(compiler, "addq $%zu, gen0_ptr(%rip)", free * 8 + 16);
+  compiler->heap += free * 8 + 16 + boxes * 8;
 }
 
 void emit_tail_call(compiler_t *compiler, exprs_t args, exprs_t rest) {
@@ -1789,15 +1794,14 @@ void find_and_fill_boxes(compiler_t *compiler, exprs_t rest) {
     return;
   }
   for (size_t i = 0; i < all_sets->len; i++) {
-    char *free_var = all_sets->arr[i].exprs->arr[1].str;
-    ssize_t found = find_active_var_env(compiler->env, free_var);
-    if (found == -1) {
-      found = find_free(compiler->free, free_var);
-      if (found == -1) {
-        found = compiler->free->len;
-        push_free(compiler->free, strdup(free_var), 1);
-      } else {
-        compiler->free->arr[found].boxed = 1;
+    ssize_t found =
+        rfind_active_var_env(compiler->env, all_sets->arr[i].exprs->arr[1].str);
+    if (compiler->env->arr[found].var_type == Mutable) {
+      compiler->env->arr[found].var_type = Free;
+      compiler->env->arr[found].free_idx = compiler->free;
+      compiler->free++;
+      if (compiler->env->arr[found].val_type < Cons) {
+        compiler->env->arr[found].val_type += BoxUnknown - 1;
       }
     }
   }
@@ -1809,27 +1813,14 @@ void emit_lambda(compiler_t *compiler, const char *name, exprs_t rest) {
   int err_code = ExpectedAtLeastBinary;
   if (rest.len > 1) {
     if (rest.arr[0].type == List) {
-      env_t *saved_env = compiler->env;
-      free_t *saved_free = compiler->free;
       enum emit saved_emit = compiler->emit;
-      compiler->env = create_full_from_const_env(saved_env, 8, 3, 3, 0, 4);
-      compiler->free = create_free(4);
-      if (name) {
-        ssize_t recurse = find_active_var_env(saved_env, name);
-        if (recurse != -1) {
-          push_var_env(compiler->env, strdup(name), Lambda, -1, 0);
-          compiler->env->arr[compiler->env->len - 1].active = 1;
-          compiler->env->arr[compiler->env->len - 1].args =
-              clone_exprs(saved_env->arr[recurse].args);
-        }
-      }
       for (size_t i = 0; i < rest.arr[0].exprs->len; i++) {
         if (rest.arr[0].exprs->arr[i].type == Sym) {
-          size_t reg = get_unused_env(compiler->env);
+          size_t reg = reassign_postn_env(compiler->env, i, 6);
           compiler->env->rarr[reg].variable = 1;
           compiler->env->rarr[reg].type = Unknown;
           push_var_env(compiler->env, strdup(rest.arr[0].exprs->arr[i].str),
-                       Unknown, reg, 0);
+                       Unknown, reg, Mutable);
           compiler->env->arr[compiler->env->len - 1].active = 1;
         } else {
           err_code = ExpectedSymb;
@@ -1867,36 +1858,18 @@ void emit_lambda(compiler_t *compiler, const char *name, exprs_t rest) {
                       (compiler->env->len - compiler->env->stack_offset) * 8);
       }
       unlock_dstrs(compiler->fun);
-      delete_env(compiler->env);
-      compiler->env = saved_env;
-      size_t free_len = compiler->free->len;
-      size_t *free_vars = calloc(sizeof(*free_vars), free_len);
-      for (size_t i = 0; i < free_len; i++) {
-        ssize_t found =
-            rfind_active_var_env(compiler->env, compiler->free->arr[i].str);
-        if (found == -1) {
-          err_code = UndefinedSymb;
-          goto LambErr;
-        } else {
-          if (compiler->free->arr[i].boxed) {
-            compiler->env->arr[found].type = BoxUnknown;
-            free_vars[i] = (found << 1) | 1;
-          } else {
-            free_vars[i] = (found << 1);
-          }
-        }
-      }
-      delete_free(compiler->free);
-      compiler->free = saved_free;
       compiler->emit = saved_emit;
-      emit_closure(compiler, lamb, rest.arr[0].exprs->len, free_vars, free_len);
+      emit_closure(compiler, lamb, rest.arr[0].exprs->len);
       compiler->ret_type = Lambda;
       if (rest.arr[0].exprs) {
         compiler->ret_args = clone_exprs(rest.arr[0].exprs);
       }
-      free(free_vars);
       if (!compiler->fun->lock) {
         collapse_dstrs(compiler->fun);
+        compiler->free = 0;
+      }
+      for (size_t i = 0; i < rest.arr[0].exprs->len; i++) {
+        pop_var_env(compiler->env);
       }
       return;
     } else {
@@ -1914,7 +1887,7 @@ void emit_var_define(compiler_t *compiler, exprs_t rest, ssize_t postn) {
   if (found == -1) {
     errc(compiler, UndefinedSymb);
   }
-  if (compiler->env->arr[found].constant) {
+  if (compiler->env->arr[found].var_type == Constant) {
     if (!compiler->env->arr[found].active) {
       compiler->env->arr[found].active = 1;
     } else {
@@ -1928,7 +1901,7 @@ void emit_var_define(compiler_t *compiler, exprs_t rest, ssize_t postn) {
     } else {
       compiler->env->arr[found].active = 1;
     }
-    compiler->env->arr[found].constant = 0;
+    compiler->env->arr[found].var_type = Mutable;
 
     size_t reg = get_unused_postn_env(compiler->env, 6);
     compiler->env->arr[found].idx = reg;
@@ -1987,61 +1960,58 @@ void emit_define(compiler_t *compiler, exprs_t rest) {
 
 void emit_ufun(compiler_t *compiler, const char *str, exprs_t rest) {
   ssize_t found = rfind_active_var_env(compiler->env, str);
-  if (found == -1 && compiler->free) {
-    // NOTE: This is the worst case. Gates have fallen.
-    // We cannot tell if we are looking at a lamb or a number.
-    found = find_free(compiler->free, str);
-    if (found == -1) {
-      found = compiler->free->len;
-      push_free(compiler->free, strdup(str), 0);
-    }
-    // if (found + 1 != R13) {
-    //  emit_movq_var_reg(compiler, found, R13);
-    //}
-    size_t l0 = compiler->label++;
-    emit_size_str(compiler, "movq %zu(%%r13), %%rax", found * 8 + 10);
-    emit_str(compiler, "pushq %r13\nmovq %rax, %r13");
-    emit_str(compiler, "movq -6(%r13), %rax");
-    emit_size_str(compiler, "cmpq $%zu, %%rax", rest.len);
-    emit_size_str(compiler, "jne L%zu", l0);
-    size_t a_count = spill_args(compiler);
-    // TODO: Try to order this if possible at all, since otherwise (f (n-1) n)
-    // will always cause unexpected behaviour.
-    // Worst case have to reassign and save all variables to guarantee proper
-    // result.
-    for (size_t i = 0; i < rest.len; i++) {
-      size_t new = reassign_postn_env(compiler->env, i, rest.len);
-      emit_movq_reg_reg(compiler, i + 1, new + 1);
-      emit_store_expr(compiler, rest.arr[i], i, 0, 0);
-    }
-    emit_str(compiler, "movq 2(%r13), %rax");
-    emit_str(compiler, "callq *%rax");
-    reorganize_args(compiler, a_count);
-    emit_size_str(compiler, "L%zu:", l0);
-    emit_str(compiler, "popq %r13");
-  } else if (compiler->env->arr[found].type == Lambda) {
-    if (compiler->env->arr[found].args->len == rest.len) {
-      if (compiler->env->arr[found].idx != -1 &&
-          compiler->env->arr[found].idx + 1 != R13) {
+  if (found != -1) {
+    if (compiler->env->arr[found].val_type == Lambda) {
+      if (compiler->emit == Fun) {
+        if (compiler->env->arr[found].var_type == Free) {
+          // NOTE: This is the worst case. Gates have fallen.
+          // We cannot tell if we are looking at a lamb or a number.
+          size_t l0 = compiler->label++;
+          emit_size_str(compiler, "movq %zu(%%r13), %%rax", found * 8 + 10);
+          emit_str(compiler, "pushq %r13\nmovq %rax, %r13");
+          emit_str(compiler, "movq -6(%r13), %rax");
+          emit_size_str(compiler, "cmpq $%zu, %%rax", rest.len);
+          emit_size_str(compiler, "jne L%zu", l0);
+          size_t a_count = spill_args(compiler);
+          // TODO: Try to order this if possible at all, since otherwise (f
+          // (n-1) n) will always cause unexpected behaviour. Worst case have to
+          // reassign and save all variables to guarantee proper result.
+          for (size_t i = 0; i < rest.len; i++) {
+            size_t new = reassign_postn_env(compiler->env, i, rest.len);
+            emit_movq_reg_reg(compiler, i + 1, new + 1);
+            emit_store_expr(compiler, rest.arr[i], i, 0, 0);
+          }
+          emit_str(compiler, "movq 2(%r13), %rax");
+          emit_str(compiler, "callq *%rax");
+          reorganize_args(compiler, a_count);
+          emit_size_str(compiler, "L%zu:", l0);
+          emit_str(compiler, "popq %r13");
+        }
+      } else {
+        emit_str(compiler, "pushq %r13");
         emit_movq_var_reg(compiler, compiler->env->arr[found].idx, R13);
+        size_t a_count = spill_args(compiler);
+        solve_call_order(compiler, *compiler->env->arr[found].args, rest);
+        emit_str(compiler, "movq 2(%r13), %rax");
+        emit_str(compiler, "callq *%rax");
+        reorganize_args(compiler, a_count);
+        emit_str(compiler, "popq %r13");
       }
-      size_t a_count = spill_args(compiler);
-      solve_call_order(compiler, *compiler->env->arr[found].args, rest);
-      emit_str(compiler, "movq 2(%r13), %rax");
-      emit_str(compiler, "callq *%rax");
-      reorganize_args(compiler, a_count);
     } else {
-      errc(compiler, ExpectedNoArg + compiler->env->arr[found].args->len);
+      if (compiler->env->arr[found].args->len == rest.len) {
+        if (compiler->env->arr[found].idx != -1 &&
+            compiler->env->arr[found].idx + 1 != R13) {
+          emit_movq_var_reg(compiler, compiler->env->arr[found].idx, R13);
+        }
+        size_t a_count = spill_args(compiler);
+        solve_call_order(compiler, *compiler->env->arr[found].args, rest);
+        emit_str(compiler, "movq 2(%r13), %rax");
+        emit_str(compiler, "callq *%rax");
+        reorganize_args(compiler, a_count);
+      } else {
+        errc(compiler, ExpectedNoArg + compiler->env->arr[found].args->len);
+      }
     }
-  } else if (compiler->free) {
-    emit_str(compiler, "pushq %r13");
-    emit_movq_var_reg(compiler, compiler->env->arr[found].idx, R13);
-    size_t a_count = spill_args(compiler);
-    solve_call_order(compiler, *compiler->env->arr[found].args, rest);
-    emit_str(compiler, "movq 2(%r13), %rax");
-    emit_str(compiler, "callq *%rax");
-    reorganize_args(compiler, a_count);
-    emit_str(compiler, "popq %r13");
   } else {
     errc(compiler, UnmatchedFun);
   }
@@ -2316,10 +2286,10 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
     size_t a_count = spill_args(compiler);
     for (size_t i = 0; i < rest.len; i++) {
       emit_store_expr(compiler, rest.arr[i], i, 0, 0);
-      compiler->env->arr[i].type = Unknown;
+      compiler->env->arr[i].val_type = Unknown;
     }
     for (size_t i = 0; i < rest.len; i++) {
-      compiler->env->arr[i].type = None;
+      compiler->env->arr[i].val_type = None;
     }
     emit_str(compiler, "movq 2(%r13), %rax");
     emit_str(compiler, "callq *%rax");
@@ -2335,44 +2305,34 @@ void emit_function(compiler_t *compiler, expr_t first, exprs_t rest) {
 void emit_store_symb_expr(compiler_t *compiler, const char *symb, size_t index,
                           size_t var_index, int use_var) {
   ssize_t found = rfind_active_var_env(compiler->env, symb);
-  if (found == -1) {
-    if (compiler->free) {
-      found = find_free(compiler->free, symb);
-      if (found == -1) {
-        found = compiler->free->len;
-        push_free(compiler->free, strdup(symb), 0);
-      }
-      emit_movq_regmem_var(compiler, found * 8 + 10, R13, index);
-      compiler->env->rarr[index].type = compiler->env->arr[found].type;
-      if (compiler->free->arr[found].boxed) {
-        emit_movq_regmem_var(compiler, 0, index + 1, index);
-        compiler->env->rarr[index].type = Unknown;
-      }
+  if (found != -1) {
+    if (compiler->env->arr[found].var_type == Free) {
+      emit_movq_regmem_var(
+          compiler, compiler->env->arr[found].free_idx * 8 + 10, R13, index);
+      compiler->env->rarr[index].type = compiler->env->arr[found].val_type;
+      // if (compiler->env->arr[found].val_type >= BoxUnknown) {
+      //   emit_movq_regmem_var(compiler, 0, index + 1, index);
+      //  compiler->env->rarr[index].type =
+      //     compiler->env->arr[found].val_type - BoxUnknown;
+      //}
+    } else if (compiler->env->arr[found].val_type >= BoxUnknown) {
+      emit_movq_regmem_var(compiler, 0, compiler->env->arr[found].idx + 1,
+                           index);
+      compiler->env->rarr[index].type =
+          compiler->env->arr[found].val_type - BoxUnknown;
+    } else if (compiler->env->arr[found].var_type == Constant) {
+      emit_movq_const_var(compiler, compiler->env->arr[found].idx, index);
     } else {
-      errc(compiler, UndefinedSymb);
+      emit_movq_var_var(compiler, compiler->env->arr[found].idx, index);
+      compiler->env->rarr[index].type = compiler->env->arr[found].val_type;
+    }
+    if (use_var && compiler->env->arr[found].val_type == Lambda &&
+        compiler->env->arr[found].args) {
+      compiler->env->arr[var_index].args =
+          clone_exprs(compiler->env->arr[found].args);
     }
   } else {
-    if (compiler->env->arr[found].type >= BoxUnknown) {
-      // Potentially Err properly here
-      // if (compiler->env->arr[found].constant) {
-      // errc(compiler, ExpectedConstant);
-      //}
-      emit_movq_regmem_var(compiler, 0, compiler->env->arr[found].idx, index);
-      compiler->env->rarr[index].type =
-          compiler->env->arr[found].type - BoxUnknown;
-    } else {
-      if (compiler->env->arr[found].constant) {
-        emit_movq_const_var(compiler, compiler->env->arr[found].idx, index);
-      } else {
-        emit_movq_var_var(compiler, compiler->env->arr[found].idx, index);
-        compiler->env->rarr[index].type = compiler->env->arr[found].type;
-      }
-    }
-  }
-  if (use_var && compiler->env->arr[found].type == Lambda &&
-      compiler->env->arr[found].args) {
-    compiler->env->arr[var_index].args =
-        clone_exprs(compiler->env->arr[found].args);
+    errc(compiler, UndefinedSymb);
   }
 }
 
@@ -2428,48 +2388,36 @@ void emit_store_expr(compiler_t *compiler, expr_t expr, size_t index,
     break;
   }
   if (use_var) {
-    compiler->env->arr[var_index].type = compiler->env->rarr[index].type;
+    compiler->env->arr[var_index].val_type = compiler->env->rarr[index].type;
   }
 }
 
 void emit_symb_ret(compiler_t *compiler, const char *symb) {
   ssize_t found = rfind_active_var_env(compiler->env, symb);
-  if (found == -1) {
-    if (compiler->free) {
-      found = find_free(compiler->free, symb);
-      if (found == -1) {
-        found = compiler->free->len;
-        push_free(compiler->free, strdup(symb), 0);
-      }
-      emit_movq_regmem_reg(compiler, found * 8 + 10, R13, Rax);
-      compiler->ret_type = Unknown; // compiler->env->arr[found].type;
-      if (compiler->free->arr[found].boxed) {
-        emit_movq_regmem_reg(compiler, 0, Rax, Rax);
-        compiler->ret_type = Unknown;
-      }
+  if (found != -1) {
+    if (compiler->env->arr[found].var_type == Free) {
+      emit_movq_regmem_reg(
+          compiler, compiler->env->arr[found].free_idx * 8 + 10, R13, Rax);
+      compiler->ret_type = compiler->env->arr[found].val_type;
+      // if (compiler->env->arr[found].val_type >= BoxUnknown) {
+      // emit_movq_regmem_reg(compiler, 0, Rax, Rax);
+      // compiler->ret_type = compiler->env->arr[found].val_type - BoxUnknown;
+      //}
+    } else if (compiler->env->arr[found].val_type >= BoxUnknown) {
+      emit_movq_regmem_reg(compiler, 0, compiler->env->arr[found].idx + 1, Rax);
+      compiler->ret_type = compiler->env->arr[found].val_type - BoxUnknown;
+    } else if (compiler->env->arr[found].var_type == Constant) {
+      emit_movq_const_reg(compiler, compiler->env->arr[found].idx, Rax);
     } else {
-      errc(compiler, UndefinedSymb);
+      emit_movq_var_reg(compiler, compiler->env->arr[found].idx, Rax);
+      compiler->ret_type = compiler->env->arr[found].val_type;
+    }
+    if (compiler->env->arr[found].val_type == Lambda &&
+        compiler->env->arr[found].args) {
+      compiler->ret_args = clone_exprs(compiler->env->arr[found].args);
     }
   } else {
-    if (compiler->env->arr[found].type >= BoxUnknown) {
-      // Potentially Err properly here
-      // if (compiler->env->arr[found].constant) {
-      // errc(compiler, ExpectedConstant);
-      //}
-      emit_movq_regmem_reg(compiler, 0, compiler->env->arr[found].idx + 1, Rax);
-      compiler->ret_type = compiler->env->arr[found].type - BoxUnknown;
-    } else {
-      if (compiler->env->arr[found].constant) {
-        emit_movq_const_reg(compiler, compiler->env->arr[found].idx, Rax);
-      } else {
-        emit_movq_var_reg(compiler, compiler->env->arr[found].idx, Rax);
-        compiler->ret_type = compiler->env->arr[found].type;
-      }
-    }
-  }
-  if (compiler->env->arr[found].type == Lambda &&
-      compiler->env->arr[found].args) {
-    compiler->ret_args = clone_exprs(compiler->env->arr[found].args);
+    errc(compiler, UndefinedSymb);
   }
 }
 
@@ -2705,24 +2653,24 @@ void emit_constants(compiler_t *compiler) {
                                      try_result[0]);
             push_var_env(compiler->env,
                          strdup(all_defs->arr[i].exprs->arr[1].str),
-                         try_result[1], const_index, 1);
+                         try_result[1], const_index, Constant);
             const_index++;
           } else {
             // Consider vectors, lists, etc. mutable
             push_var_env(compiler->env,
                          strdup(all_defs->arr[i].exprs->arr[1].str), Unknown,
-                         -1, 0);
+                         -1, Mutable);
           }
           continue;
         Mutable:
           push_var_env(compiler->env,
                        strdup(all_defs->arr[i].exprs->arr[1].str), Unknown, -1,
-                       0);
+                       Mutable);
         } else {
           // Function
           push_var_env(compiler->env,
                        strdup(all_defs->arr[i].exprs->arr[1].exprs->arr[0].str),
-                       Lambda, -1, 0);
+                       Lambda, -1, Mutable);
           compiler->env->arr[compiler->env->len - 1].args =
               slice_start_clone_exprs(all_defs->arr[i].exprs->arr[1].exprs, 1);
         }
@@ -2737,19 +2685,19 @@ void emit_constants(compiler_t *compiler) {
                                      try_result[0]);
             push_var_env(compiler->env,
                          strdup(all_defs->arr[i].exprs->arr[1].str),
-                         try_result[1], const_index, 1);
+                         try_result[1], const_index, Constant);
             const_index++;
           } else {
             // Consider vectors, lists, etc. mutable
             push_var_env(compiler->env,
                          strdup(all_defs->arr[i].exprs->arr[1].str), Unknown,
-                         -1, 0);
+                         -1, Mutable);
           }
         } else {
           // Function
           push_var_env(compiler->env,
                        strdup(all_defs->arr[i].exprs->arr[1].exprs->arr[0].str),
-                       Lambda, -1, 0);
+                       Lambda, -1, Mutable);
           exprs_t *args =
               slice_start_clone_exprs(all_defs->arr[i].exprs->arr[1].exprs, 1);
           if (args) {

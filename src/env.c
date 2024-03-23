@@ -54,9 +54,9 @@ env_t *create_full_from_const_env(env_t *constants, size_t vol_cap,
   env->nonvol_offset = vol_cap;
 
   for (size_t i = 0; i < constants->len; i++) {
-    if (constants->arr[i].active && constants->arr[i].constant) {
-      push_var_env(env, strdup(constants->arr[i].str), constants->arr[i].type,
-                   constants->arr[i].idx, 1);
+    if (constants->arr[i].active && constants->arr[i].var_type == Constant) {
+      push_var_env(env, strdup(constants->arr[i].str),
+                   constants->arr[i].val_type, constants->arr[i].idx, 1);
       env->arr[env->len - 1].active = 1;
     }
   }
@@ -73,7 +73,7 @@ void delete_env(env_t *env) {
   free(env);
 }
 
-void push_env(env_t *env, enum var_type type, char var) {
+void push_env(env_t *env, enum val_type type, char var) {
   if (env->rlen >= env->rcap) {
     env->rcap <<= 1;
     env->rarr = reallocarray(env->rarr, env->rcap, sizeof(*env->rarr));
@@ -89,7 +89,7 @@ void push_env(env_t *env, enum var_type type, char var) {
   env->rlen++;
 }
 
-void insert_env(env_t *env, size_t i, enum var_type type, char var) {
+void insert_env(env_t *env, size_t i, enum val_type type, char var) {
   while (i > env->rlen) {
     push_env(env, 0, 0);
   }
@@ -107,8 +107,8 @@ void remove_env(env_t *env, size_t i) {
   env->rarr[i].arg_spill = 0;
 }
 
-void push_var_env(env_t *env, char *str, enum var_type type, size_t idx,
-                  char constant) {
+void push_var_env(env_t *env, char *str, enum val_type val_type, size_t idx,
+                  enum var_type var_type) {
   if (env->len >= env->cap) {
     env->cap <<= 1;
     env->arr = reallocarray(env->arr, env->cap, sizeof(*env->arr));
@@ -117,8 +117,8 @@ void push_var_env(env_t *env, char *str, enum var_type type, size_t idx,
     }
   }
   env->arr[env->len].str = str;
-  env->arr[env->len].type = type;
-  env->arr[env->len].constant = constant;
+  env->arr[env->len].val_type = val_type;
+  env->arr[env->len].var_type = var_type;
   env->arr[env->len].idx = idx;
   env->arr[env->len].active = 0;
   env->arr[env->len].args = 0;
@@ -128,7 +128,7 @@ void push_var_env(env_t *env, char *str, enum var_type type, size_t idx,
 void pop_var_env(env_t *env) {
   env->len--;
   free(env->arr[env->len].str);
-  if (!env->arr[env->len].constant && env->arr[env->len].idx != -1) {
+  if (env->arr[env->len].var_type != Constant && env->arr[env->len].idx != -1) {
     remove_env(env, env->arr[env->len].idx);
   }
 }
@@ -136,8 +136,8 @@ void pop_var_env(env_t *env) {
 void remove_var_env(env_t *env, size_t i) {
   free(env->arr[i].str);
   env->arr[i].str = 0;
-  env->arr[i].type = None;
-  env->arr[i].constant = 0;
+  env->arr[i].val_type = None;
+  env->arr[i].var_type = 0;
   env->arr[i].active = 0;
   env->arr[i].args = 0;
   env->arr[i].idx = -1;
@@ -229,7 +229,7 @@ size_t get_unused_pren_env(env_t *env, size_t n) {
 size_t reassign_postn_env(env_t *env, size_t i, size_t n) {
   size_t new = get_unused_postn_env(env, n);
   for (size_t j = 0; j < env->len; j++) {
-    if (env->arr[j].active && !env->arr[j].constant &&
+    if (env->arr[j].active && env->arr[j].var_type != Constant &&
         env->arr[j].idx == (ssize_t)i) {
       env->arr[j].idx = new;
     }
