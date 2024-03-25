@@ -66,7 +66,6 @@ exprs_t *slice_start_clone_exprs(exprs_t *exprs, size_t start) {
 int find_symb_exprs(exprs_t *exprs, const char *symb) {
   for (size_t i = 0; i < exprs->len; i++) {
     switch (exprs->arr[i].type) {
-    case Err:
     case Null:
     case Bool:
     case Chr:
@@ -75,7 +74,7 @@ int find_symb_exprs(exprs_t *exprs, const char *symb) {
     case Str:
     case Vec:
       break;
-    case Sym:
+    case Symb:
       if (!strcmp(exprs->arr[i].str, symb))
         return i;
       else
@@ -95,7 +94,6 @@ exprs_t *find_all_symb_exprs(exprs_t *exprs, const char *symb) {
   int inside = 0;
   for (size_t i = 0; i < exprs->len; i++) {
     switch (exprs->arr[i].type) {
-    case Err:
     case Null:
     case Bool:
     case Chr:
@@ -104,7 +102,7 @@ exprs_t *find_all_symb_exprs(exprs_t *exprs, const char *symb) {
     case Str:
     case Vec:
       break;
-    case Sym:
+    case Symb:
       if (!inside && !strcmp(exprs->arr[i].str, symb))
         push_exprs(found, (expr_t){.type = List, .exprs = clone_exprs(exprs)});
       else

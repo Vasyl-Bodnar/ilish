@@ -10,16 +10,33 @@
 /// TODO: Move compiler errors to a different err type
 enum err {
   Eof,
+
   QuoteUnfinishedEof,
-  SpecialUnfinishedEof,
-  CharUnfinishedEof,
+  UnquoteOutsideQuote,
+  SpliceOutsideQuote,
+
+  ImproperSpecial,
+  ImproperFalse,
+  ImproperTrue,
+
+  ImproperCharName,
+  ImproperAlarmName,
+  ImproperBackspaceName,
+  ImproperDeleteName,
+  ImproperEscapeName,
+  ImproperNewlineNullName,
+  ImproperReturnName,
+  ImproperSpaceName,
+  ImproperTabName,
+
   StrUnfinishedEof,
+  SymbUnfinishedEof,
+
   ListUnfinishedEof,
   ListUnmatchedRight,
   EmptyList,
+
   VecUnfinishedEof,
-  VecUnmatchedRight,
-  EmptyVec,
 
   ParserFailure,
   UnmatchedFun,

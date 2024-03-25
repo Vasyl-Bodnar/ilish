@@ -40,15 +40,61 @@ void print_err(err_t err) {
     printf("Special symbol ' is unfinished. Did you forget to finish the quote "
            "like '(), '(a b). Chars use #\\c instead of 'c'");
     break;
-  case SpecialUnfinishedEof:
-    printf("Special symbol # is unfinished. Did you mean a char #\\a, bool #t, "
-           "or vector #()?");
+  case UnquoteOutsideQuote:
+    printf(", or unquote was not used inside a quote.");
     break;
-  case CharUnfinishedEof:
-    printf("Char is unfinished, check for unfinished #\\.");
+  case SpliceOutsideQuote:
+    printf(",@ or unquote-splicing was not used inside a quote.");
+    break;
+  case ImproperSpecial:
+    printf("Your use of # symbol is courageous, but this is not allowed.");
+    break;
+  case ImproperFalse:
+    printf("You misspelled #false.");
+    break;
+  case ImproperTrue:
+    printf("You misspelled #true.");
+    break;
+  case ImproperCharName:
+    printf("You have misspelled a character by its name, make sure it is one "
+           "of the allowed names like #space and #tab.");
+    break;
+  case ImproperAlarmName:
+    printf("You have misspelled the #\\alarm character.");
+    break;
+  case ImproperBackspaceName:
+    printf("You have misspelled the #\\backspace character.");
+    break;
+  case ImproperDeleteName:
+    printf("You have misspelled the #\\delete character.");
+    break;
+  case ImproperEscapeName:
+    printf("You have misspelled the #\\escape character.");
+    break;
+  case ImproperNewlineNullName:
+    printf("You have misspelled a character name, are you trying to use "
+           "#\\newline or #\\null?");
+    break;
+  case ImproperReturnName:
+    printf("You have misspelled the #\\return character.");
+    break;
+  case ImproperSpaceName:
+    printf("You have misspelled the #\\space character.");
+    break;
+  case ImproperTabName:
+    printf("You have misspelled the #\\tab character.");
     break;
   case StrUnfinishedEof:
-    printf("String is unfinished, check for matching \"\".");
+    printf("The string was not ended by \" before reaching end of file. Check "
+           "for matching double-quotes.");
+    break;
+  case SymbUnfinishedEof:
+    printf("The symb was not ended by | before reaching end of file. Check "
+           "for matching pipes.");
+    break;
+  case VecUnfinishedEof:
+    printf("The vector was not ended by ) before reaching end of file. Check "
+           "for matching parens.");
     break;
   case ListUnfinishedEof:
     printf("SExpr is unfinished, check for matching parens ( ).");
@@ -59,17 +105,6 @@ void print_err(err_t err) {
         "(.");
     break;
   case EmptyList:
-    printf("Empty lists are not allowed.");
-    break;
-  case VecUnfinishedEof:
-    printf("Vector is unfinished, check for matching parens #( ).");
-    break;
-  case VecUnmatchedRight:
-    printf("Right vector paren ) is unmatched, either it is extra or lacks "
-           "a left paren "
-           "#(.");
-    break;
-  case EmptyVec:
     printf("Empty lists are not allowed.");
     break;
   case ParserFailure:

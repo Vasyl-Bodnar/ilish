@@ -5,7 +5,6 @@
 
 void delete_expr(expr_t expr) {
   switch (expr.type) {
-  case Err:
   case Null:
   case Bool:
   case Chr:
@@ -13,7 +12,7 @@ void delete_expr(expr_t expr) {
   case Num:
     break;
   case Str:
-  case Sym:
+  case Symb:
     free(expr.str);
     break;
   case List:
@@ -25,7 +24,6 @@ void delete_expr(expr_t expr) {
 
 expr_t clone_expr(expr_t expr) {
   switch (expr.type) {
-  case Err:
   case Null:
   case Bool:
   case Chr:
@@ -34,7 +32,7 @@ expr_t clone_expr(expr_t expr) {
   default:
     return expr;
   case Str:
-  case Sym:
+  case Symb:
     return (expr_t){.loc = expr.loc,
                     .line = expr.line,
                     .type = expr.type,
@@ -50,7 +48,6 @@ expr_t clone_expr(expr_t expr) {
 
 int check_symb_expr(expr_t expr, const char *symb) {
   switch (expr.type) {
-  case Err:
   case Null:
   case Bool:
   case Chr:
@@ -58,7 +55,7 @@ int check_symb_expr(expr_t expr, const char *symb) {
   case Num:
   case Str:
     break;
-  case Sym:
+  case Symb:
     if (!strcmp(expr.str, symb))
       return 1;
     else
@@ -72,9 +69,6 @@ int check_symb_expr(expr_t expr, const char *symb) {
 
 void print_expr(expr_t expr) {
   switch (expr.type) {
-  case Err:
-    printf("Error %d!", expr.ch);
-    break;
   case Null:
     printf("()");
     break;
@@ -91,12 +85,12 @@ void print_expr(expr_t expr) {
     printf("#\\%zx", expr.uch);
     break;
   case Num:
-    printf("%zu", expr.num);
+    printf("%zd", expr.num);
     break;
   case Str:
     printf("\"%s\"", expr.str);
     break;
-  case Sym:
+  case Symb:
     printf("%s", expr.str);
     break;
   case List:

@@ -120,6 +120,7 @@ void push_var_env(env_t *env, char *str, enum val_type val_type, size_t idx,
   env->arr[env->len].val_type = val_type;
   env->arr[env->len].var_type = var_type;
   env->arr[env->len].idx = idx;
+  env->arr[env->len].free_idx = -1;
   env->arr[env->len].active = 0;
   env->arr[env->len].args = 0;
   env->len++;
@@ -141,6 +142,7 @@ void remove_var_env(env_t *env, size_t i) {
   env->arr[i].active = 0;
   env->arr[i].args = 0;
   env->arr[i].idx = -1;
+  env->arr[i].free_idx = -1;
 }
 
 ssize_t find_var_env(env_t *env, const char *str) {

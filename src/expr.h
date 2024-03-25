@@ -8,14 +8,13 @@
 
 /// @brief Expr type.
 enum expr {
-  Err,
   Null,
   Bool,
   Chr,
   UniChr,
   Num,
   Str,
-  Sym,
+  Symb,
   List,
   Vec,
 };
